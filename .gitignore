@@ -1,0 +1,9 @@
+__pycache__/
+.vscode/
+confusion_matrix_data/
+logs/
+models/
+doc_tmp/
+Omniglot/
+Omniglot/nn/
+Omniglot/nn_test/

@@ -1,0 +1,329 @@
+import tensorflow as tf
+from tensorflow.keras.layers import Conv2D, MaxPool2D, Flatten, Dense, Input, Subtract, Lambda
+from tensorflow.keras import Model, Sequential
+import tensorflow.keras.backend as K
+from tensorflow.keras.models import load_model
+from tensorflow.keras.regularizers import l2
+from tensorflow.keras.initializers import RandomNormal
+from tensorflow.keras.callbacks import TensorBoard
+from omniglot_loader import OmniglotLoader
+import matplotlib.pyplot as plt
+import os
+from datetime import datetime
+import numpy as np
+import pickle
+
+class SiameseNetwork:
+
+    def __init__(self, input_shape=(105, 105, 1), batch=20, model_location=None):
+        self.input_shape = input_shape
+        self.l2_penalization = 1e-2
+        if model_location is not None:
+            self.model = load_model(model_location)
+            #self.model.compile(loss='binary_crossentropy', metrics=['binary_accuracy'], optimizer='sgd')
+        else:
+            self.model = self.__get_siamese_model()
+        self.batch = batch
+        run_start_time = datetime.today().strftime('%Y-%m-%d %H-%M-%S')
+        self.__save_dir = './models/' + run_start_time
+        self.__train_dir = './logs/' + run_start_time + '/training'
+        self.__test_dir = './logs/' + run_start_time + '/test'
+        self.__confusion_matrix_dir = './confusion_matrix_data/' + run_start_time
+
+    ####################################################################
+    # Getters and setters                                              #
+    ####################################################################
+    def get_current_epoch(self):
+        return self.__current_epoch
+
+    def set_current_epoch(self, epoch):
+        self.__current_epoch = epoch
+
+    def __get_siamese_model(self):
+        '''
+            Creates siamese neural network
+        '''
+
+        # First create base convolutional network
+        base_network = Sequential()
+        base_network.add(Conv2D(filters=64, kernel_size=(10, 10), activation='relu', 
+            kernel_initializer=RandomNormal(mean=0.0, stddev=1e-2),
+            bias_initializer=RandomNormal(mean=0.5, stddev=1e-2),
+            input_shape=self.input_shape, kernel_regularizer=l2(self.l2_penalization),  name='Conv_layer_1'))
+        base_network.add(MaxPool2D())
+        base_network.add(Conv2D(filters=128, kernel_size=(7, 7), activation='relu',
+            kernel_initializer=RandomNormal(mean=0.0, stddev=1e-2),
+            bias_initializer=RandomNormal(mean=0.5, stddev=1e-2), 
+            kernel_regularizer=l2(self.l2_penalization), name='Conv_layer_2'))
+        base_network.add(MaxPool2D())
+        base_network.add(Conv2D(filters=128, kernel_size=(4, 4), activation='relu',
+            kernel_initializer=RandomNormal(mean=0.0, stddev=1e-2),
+            bias_initializer=RandomNormal(mean=0.5, stddev=1e-2), 
+            kernel_regularizer=l2(self.l2_penalization), name='Conv_layer_3'))
+        base_network.add(MaxPool2D())
+        base_network.add(Conv2D(filters=256, kernel_size=(4, 4), activation='relu',
+            kernel_initializer=RandomNormal(mean=0.0, stddev=1e-2),
+            bias_initializer=RandomNormal(mean=0.5, stddev=1e-2), 
+            kernel_regularizer=l2(self.l2_penalization), name='Conv_layer_4'))
+        base_network.add(Flatten())
+        base_network.add(Dense(units=4096, activation='sigmoid', 
+            kernel_initializer=RandomNormal(mean=0.0, stddev=2e-1),
+            bias_initializer=RandomNormal(mean=0.5, stddev=1e-2),
+            kernel_regularizer=l2(self.l2_penalization), name='Dense_layer_1'))
+
+        left_input = Input(self.input_shape)
+        right_input = Input(self.input_shape)
+
+        encoded_image_left = base_network(left_input)
+        encoded_image_right = base_network(right_input)
+        
+        # Defining L1 distance layer
+        distance_layer = Lambda(lambda encoding: K.abs(encoding[0] - encoding[1]))
+        l1_distance = distance_layer([encoded_image_left, encoded_image_right])
+        
+        # Prediction layer
+        prediction = Dense(1, activation='sigmoid')(l1_distance)
+        model = tf.keras.Model([left_input, right_input], [prediction])
+        model.compile(loss='binary_crossentropy', metrics=['binary_accuracy', 'mse', 'mae', 'acc'], optimizer='sgd')
+        return model
+
+    def train(self, omniglot, epoch_num):
+        epoch_id = 0
+
+        if not os.path.exists(self.__save_dir):
+            os.makedirs(self.__save_dir)
+
+        if not os.path.exists(self.__train_dir):
+            os.makedirs(self.__train_dir)
+
+        if not os.path.exists(self.__test_dir):
+            os.makedirs(self.__test_dir)
+
+        tensorboard = TensorBoard(
+            log_dir=self.__train_dir,
+            histogram_freq=0,
+            batch_size=20,
+            write_graph=True,
+            write_grads=True)
+        tensorboard.set_model(self.model)
+
+        tensorboard_eval = TensorBoard(
+            log_dir=self.__test_dir,
+            histogram_freq=0,
+            batch_size=20,
+            write_graph=True,
+            write_grads=True)
+        tensorboard_eval.set_model(self.model)
+        print('Training started.')
+        while True:
+            if epoch_id >= epoch_num:
+                break
+
+            images, labels = omniglot.get_training_batch()
+            self.model.train_on_batch([images[:, 0], images[:, 1]], labels)
+
+            # Decay learning rate by 1% after each epoch
+            if omniglot.is_epoch_done():
+                print('Epoch #' + str(epoch_id) + ' end.')
+                epoch_id += 1
+                print('Epoch #' + str(epoch_id) + ' start.')
+                omniglot.set_epoch_done(False)
+                K.set_value(self.model.optimizer.lr, (K.get_value(self.model.optimizer.lr) * 0.99))
+                te_images, te_labels = omniglot.get_random_batch('images_background', False)
+
+                ev_images, ev_labels = omniglot.get_random_batch('images_evaluation', True)
+                
+                tr_logs = self.model.test_on_batch([te_images[:, 0], te_images[:, 1]], te_labels)
+                ev_logs = self.model.test_on_batch([ev_images[:, 0], ev_images[:, 1]], ev_labels)
+                tensorboard.on_epoch_end(epoch_id, self.named_logs(tr_logs))
+                tensorboard_eval.on_epoch_end(epoch_id, self.named_logs(ev_logs))
+
+        print('Training finished.')
+
+        print('Saving model...')
+        model_json = self.model.to_json()
+        with open(os.path.join(self.__save_dir, 'model.json'), "w") as json_file:
+            json_file.write(model_json)
+        self.model.save_weights(os.path.join(self.__save_dir, 'model_weights.h5'))
+        self.model.save(os.path.join(self.__save_dir, 'model.h5'))
+        print('Model saved successfully')
+
+    def test(self, omniglot):
+        print('Testing started.')
+        omniglot.set_current_alphabet_index(0)
+        omniglot.set_training_evaluation_symbols(False)
+
+        if not os.path.exists(self.__save_dir):
+            os.makedirs(self.__save_dir)
+
+        if not os.path.exists(self.__train_dir):
+            os.makedirs(self.__train_dir)
+
+        tensorboard = TensorBoard(log_dir=self.__train_dir, histogram_freq=0, batch_size=20, write_graph=True, write_grads=True)
+        tensorboard.set_model(self.model)
+        batch_id = 0
+        accuracy = []
+        print('Testing started.')
+        while True:
+            if omniglot.is_evaluation_done():
+                break
+
+            images, labels = omniglot.get_test_batch()
+            logs = self.model.test_on_batch([images[:, 0], images[:, 1]], labels)
+            accuracy.append(logs[1])
+            tensorboard.on_test_batch_end(batch_id, self.named_logs(logs))
+            batch_id += 1
+        
+        print('Testing finished.')
+        print('Overall accuracy: ' + str(np.mean(accuracy)))
+
+    def test_tp_fn(self, omniglot):
+        print('Testing true positives and false negatives started.')
+        omniglot.set_current_alphabet_index(0)
+        omniglot.set_training_evaluation_symbols(False)
+        omniglot.set_epoch_done(False)
+        
+
+        if not os.path.exists(self.__confusion_matrix_dir):
+            os.makedirs(self.__confusion_matrix_dir)
+
+        # [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]
+        true_positives_low = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        true_positives_high = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        false_negatives_low = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        false_negatives_high = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+        y_pred = []
+        while True:
+
+            images, _ = omniglot.get_positive_batch(False)
+            predictions = self.model.predict_on_batch([images[:, 0], images[:, 1]])
+            y_pred.append(predictions)
+
+            for i in range(len(predictions)):
+                if predictions[i] < 0.25:
+                    false_negatives_high[omniglot.get_current_alphabet_index()] += 1
+                    #images[0].append(i)
+                elif predictions[i] >= 0.25 and predictions[i] < 0.5:
+                    false_negatives_low[omniglot.get_current_alphabet_index()] += 1
+                    #images[1].append(i)
+                elif predictions[i] >= 0.5 and predictions[i] < 0.75:
+                    true_positives_low[omniglot.get_current_alphabet_index()] += 1
+                    #images[2].append(i)
+                elif predictions[i] >= 0.75:
+                    true_positives_high[omniglot.get_current_alphabet_index()] += 1
+                    #images[3].append(i)
+
+            print('Current alphabet: ' + str(omniglot.get_current_alphabet_index()))
+            if omniglot.is_epoch_done() == True:
+                break
+
+        #serialize true positives and false negatives
+        np.save(os.path.join(self.__confusion_matrix_dir, 'true_positives_low'), true_positives_low)
+        np.save(os.path.join(self.__confusion_matrix_dir, 'true_positives_high'), true_positives_high)
+        np.save(os.path.join(self.__confusion_matrix_dir, 'false_negatives_low'), false_negatives_low)
+        np.save(os.path.join(self.__confusion_matrix_dir, 'false_negatives_high'), false_negatives_high)
+        print(true_positives_low)
+        print(true_positives_high)
+        print(false_negatives_low)
+        print(false_negatives_high)
+        # Manually compute accuracy
+        y_pred = np.array(y_pred)
+        pred = y_pred.ravel() > 0.5
+        y_true = [1] * len(y_pred)
+        accuracy = np.mean(pred == y_true)
+
+        print('Testing true positives and false negatives finished.')
+        print('Overall accuracy: ' + str(np.mean(accuracy)))
+
+        return true_positives_low, true_positives_high, false_negatives_low, false_negatives_high
+
+    def test_tn_fp(self, omniglot):
+        print('Testing false positives and true negatives started.')
+        omniglot.set_current_alphabet_index(0)
+        omniglot.set_training_evaluation_symbols(False)
+        omniglot.set_epoch_done(False)
+        
+        if not os.path.exists(self.__confusion_matrix_dir):
+            os.makedirs(self.__confusion_matrix_dir)
+        
+        # [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]
+        false_positives_low = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        false_positives_high = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        true_negatives_low = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        true_negatives_high = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+        y_pred = []
+        while True:
+            images, _ = omniglot.get_negative_batch(False)
+            predictions = self.model.predict_on_batch([images[:, 0], images[:, 1]])
+            y_pred.append(predictions)
+
+            for i in range(len(predictions)):
+                if predictions[i] < 0.25:
+                    true_negatives_low[omniglot.get_current_alphabet_index()] += 1
+                    #images[0].append(i)
+                elif predictions[i] >= 0.25 and predictions[i] < 0.5:
+                    true_negatives_high[omniglot.get_current_alphabet_index()] += 1
+                    #images[1].append(i)
+                elif predictions[i] >= 0.5 and predictions[i] < 0.75:
+                    false_positives_low[omniglot.get_current_alphabet_index()] += 1
+                    #images[2].append(i)
+                elif predictions[i] >= 0.75:
+                    false_positives_high[omniglot.get_current_alphabet_index()] += 1
+                    #images[3].append(i)
+
+            print('Current alphabet: ' + str(omniglot.get_current_alphabet_index()))
+            if omniglot.is_epoch_done() == True:
+                break
+
+        #serialize true positives and false negatives
+        np.save(os.path.join(self.__confusion_matrix_dir, 'true_negatives_low'), true_negatives_low)
+        np.save(os.path.join(self.__confusion_matrix_dir, 'true_negatives_high'), true_negatives_high)
+        np.save(os.path.join(self.__confusion_matrix_dir, 'false_positives_low'), false_positives_low)
+        np.save(os.path.join(self.__confusion_matrix_dir, 'false_positives_high'), false_positives_high)
+        #print(true_negatives_low)
+        #print(true_negatives_high)
+        #print(false_positives_low)
+        #print(false_positives_high)
+
+        # Manually compute accuracy
+        y_pred = np.array(y_pred)
+        pred = y_pred.ravel() > 0.5
+        y_true = [0] * len(y_pred)
+        accuracy = np.mean(pred == y_true)
+
+        print('Testing true negatives and false positives finished.')
+        print('Overall accuracy: ' + str(np.mean(accuracy)))
+
+        return true_negatives_low, true_negatives_high, false_positives_low, false_positives_high
+
+    # Transform train_on_batch return value
+    # to dict expected by on_batch_end callback
+    def named_logs(self, logs):
+        result = {}
+        for l in zip(self.model.metrics_names, logs):
+            result[l[0]] = l[1]
+        return result
+
+
+if __name__ == '__main__':
+    print(tf.__version__)
+
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+        # Restrict TensorFlow to only allocate 1GB of memory on the first GPU
+        try:
+            tf.config.experimental.set_virtual_device_configuration(
+                gpus[0], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=5120)])
+            logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+        except RuntimeError as e:
+            # Virtual devices must be set before GPUs have been initialized
+            print(e)
+
+    omg = OmniglotLoader(use_transformations=False)
+
+    sn = SiameseNetwork()
+    #sn.model.compile()
+    sn.train(omg, 500)
