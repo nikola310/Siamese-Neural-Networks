@@ -7,11 +7,11 @@ from os.path import exists, join
 from siamese_network import SiameseNetwork
 import pandas as pd
 
-def write_data_to_file(omniglot, tp_low, tp_high, fn_low, fn_high, tn_low, tn_high, fp_low, fp_high, csv_file):
+def write_data_to_file(omniglot, class_num, tp_low, tp_high, fn_low, fn_high, tn_low, tn_high, fp_low, fp_high, csv_file):
 
         df = pd.DataFrame(columns=['True positives (low)', 'True positives (high)', 'False negatives (low)', 'False negatives (high)', 'True negatives (low)', 'True negatives (high)', 'False positives (low)', 'False positives (high)'])
 
-        for idx in range(len(omg.get_evaluation_alphabet_names())):
+        for idx in range(class_num):
             new_row = pd.DataFrame({'True positives (low)' : [tp_low[idx]],
                                     'True positives (high)' : [tp_high[idx]],
                                     'False negatives (low)' : [fn_low[idx]],
@@ -70,38 +70,15 @@ if __name__ == "__main__":
             omg.set_use_transformations(False)
             tp_low, tp_high, fn_low, fn_high = sn.test_tp_fn(omg)
             tn_low, tn_high, fp_low, fp_high = sn.test_tn_fp(omg)
-            write_data_to_file(omg, tp_low, tp_high, fn_low, fn_high, tn_low, tn_high, fp_low, fp_high, 'table_tr_no_tf_te_no_tf.csv.csv')
+            write_data_to_file(omg, eval_classes, tp_low, tp_high, fn_low, fn_high, tn_low, tn_high, fp_low, fp_high, 'table_tr_no_tf_te_no_tf.csv.csv')
         
         if test_w_transformations:
             # Now testing with transformations
             omg.set_use_transformations(True)
 
-            '''
-            imgs, labels = omg.get_negative_batch(False) #omg.get_positive_batch(False)
-            plt.figure(0, figsize=(8, 3))
-            plt.subplot(121)
-            plt.axis('off')
-            plt.imshow(imgs[3, 0].reshape(105, 105), cmap='binary')
-            plt.subplot(122)
-            plt.axis('off')
-            plt.imshow(imgs[3, 1].reshape(105, 105), cmap='binary')
-            plt.show()
-            print(omg.get_current_symbol_idx())
-            
-            imgs, labels = omg.get_negative_batch(False)
-            print(omg.get_current_symbol_idx())
-            plt.figure(0, figsize=(8, 3))
-            plt.subplot(121)
-            plt.axis('off')
-            plt.imshow(imgs[3, 0].reshape(105, 105), cmap='binary')
-            plt.subplot(122)
-            plt.axis('off')
-            plt.imshow(imgs[3, 1].reshape(105, 105), cmap='binary')
-            plt.show()
-            '''
             tp_low, tp_high, fn_low, fn_high = sn.test_tp_fn(omg)
             tn_low, tn_high, fp_low, fp_high = sn.test_tn_fp(omg)
-            write_data_to_file(omg, tp_low, tp_high, fn_low, fn_high, tn_low, tn_high, fp_low, fp_high, 'table_tr_no_tf_te_tf.csv')
+            write_data_to_file(omg, eval_classes, tp_low, tp_high, fn_low, fn_high, tn_low, tn_high, fp_low, fp_high, 'table_tr_no_tf_te_tf.csv')
 
     if model_w_tf:
         # Model trained with transformations
@@ -112,7 +89,7 @@ if __name__ == "__main__":
             omg.set_use_transformations(False)
             tp_low, tp_high, fn_low, fn_high = sn.test_tp_fn(omg)
             tn_low, tn_high, fp_low, fp_high = sn.test_tn_fp(omg)
-            write_data_to_file(omg, tp_low, tp_high, fn_low, fn_high, tn_low, tn_high, fp_low, fp_high, 'table_tr_tf_te_no_tf.csv')
+            write_data_to_file(omg, eval_classes, tp_low, tp_high, fn_low, fn_high, tn_low, tn_high, fp_low, fp_high, 'table_tr_tf_te_no_tf.csv')
         
         if test_w_transformations:
             # Now testing with transformations
@@ -120,4 +97,4 @@ if __name__ == "__main__":
 
             tp_low, tp_high, fn_low, fn_high = sn.test_tp_fn(omg)
             tn_low, tn_high, fp_low, fp_high = sn.test_tn_fp(omg)
-            write_data_to_file(omg, tp_low, tp_high, fn_low, fn_high, tn_low, tn_high, fp_low, fp_high, 'table_tr_tf_te_tf.csv')
+            write_data_to_file(omg, eval_classes, tp_low, tp_high, fn_low, fn_high, tn_low, tn_high, fp_low, fp_high, 'table_tr_tf_te_tf.csv')

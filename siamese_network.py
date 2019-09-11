@@ -16,6 +16,14 @@ import pickle
 class SiameseNetwork:
 
     def __init__(self, input_shape=(105, 105, 1), batch=20, model_location=None):
+        '''
+            Constructor for the SiameseNetworks class.
+
+            Arguments:
+                - input_shape = shape of input images
+                - batch = size of batches
+                - model_location = location of trained model to be loaded
+        '''
         self.input_shape = input_shape
         self.l2_penalization = 1e-2
         if model_location is not None:
@@ -42,6 +50,9 @@ class SiameseNetwork:
     def __get_siamese_model(self):
         '''
             Creates siamese neural network
+
+            Returns:
+                - model = instance of siamese neural network
         '''
 
         # First create base convolutional network
@@ -88,6 +99,13 @@ class SiameseNetwork:
         return model
 
     def train(self, omniglot, epoch_num):
+        '''
+            Trains the network for given number of epochs
+
+            Arguments:
+                - omniglot = instance of OmniglotLoader
+                - epoch_num = number of epochs
+        '''
         epoch_id = 0
 
         if not os.path.exists(self.__save_dir):
@@ -149,6 +167,12 @@ class SiameseNetwork:
         print('Model saved successfully')
 
     def test(self, omniglot):
+        '''
+            Performs testing of the network
+
+            Arguments:
+                - omniglot = instance of OmniglotLoader
+        '''
         print('Testing started.')
         omniglot.set_current_alphabet_index(0)
         omniglot.set_training_evaluation_symbols(False)
@@ -178,6 +202,12 @@ class SiameseNetwork:
         print('Overall accuracy: ' + str(np.mean(accuracy)))
 
     def test_tp_fn(self, omniglot):
+        '''
+            Performs testing of true positives and false negatives on the network
+
+            Arguments:
+                - omniglot = instance of OmniglotLoader
+        '''
         print('Testing true positives and false negatives started.')
         omniglot.set_current_alphabet_index(0)
         omniglot.set_training_evaluation_symbols(False)
@@ -239,6 +269,12 @@ class SiameseNetwork:
         return true_positives_low, true_positives_high, false_negatives_low, false_negatives_high
 
     def test_tn_fp(self, omniglot):
+        '''
+            Performs testing of true negatives and false positives on the network
+
+            Arguments:
+                - omniglot = instance of OmniglotLoader
+        '''
         print('Testing false positives and true negatives started.')
         omniglot.set_current_alphabet_index(0)
         omniglot.set_training_evaluation_symbols(False)

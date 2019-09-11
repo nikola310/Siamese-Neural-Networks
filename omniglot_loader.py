@@ -7,23 +7,44 @@ import numpy as np
 from PIL import Image
 
 class OmniglotLoader():
+    '''
+        A class which handles operations for loading and transforming images from Omniglot dataset. 
+    '''
+
 
     def __init__(self, path='./Omniglot', rotation_range=[-10, 10], shear_range=[5.99, 6.57], scale_range=[0.9, 1.2], shift_range=[-2, 2], batch_size=20, use_transformations=True):
+        '''
+            Basic constructor which creates the class and sets up all the parameters necessary for running the training
+            Params:
+                - path = path to root folder of omniglot dataset
+                - rotation_range = range of rotations to be applied to the images
+                - shear_range = range of degrees to be applied for shearing
+                - scale_range = range of factor for scaling by x and y
+                - shift_range = range of factor for shifting by x and y
+                - batch_size = amount of pairs to be sent in one batch
+                - use_transformations = should OmniglotLoader apply random transformations to images
+        '''
         self.path = path
         self.rotation_range = rotation_range
         self.shear_range = shear_range
         self.scale_range = scale_range
         self.shift_range = shift_range
         self.batch_size = batch_size
+        # Directories for training and evaluation dataset
         self.background_dir = 'images_background'
         self.evaluation_dir = 'images_evaluation' #'nn_test'
         self.use_transformations = use_transformations
+        # Reading alphabets and creating dictinaries
         self.training_alphabets, self.evaluation_alphabets = self.__create_alphabets()
         self.training_keys, self.testing_keys = self.__split_train_sets()
+        # Creating a series of lists and indexes that will be used during sending batches
+        # Because it is important to go through entire dataset for each epoch, 
+        # it is necessary to  keep track of where we are for each batch.
         self.__current_alphabet_index = 0
         self.__training_alphabet_list = list(self.training_alphabets.keys())
         self.__symbols_list = list(self.training_alphabets[self.__training_alphabet_list[self.__current_alphabet_index]].keys())
         self.__current_symbol_index = 0
+        # Flag to indicate if the current epoch is done
         self.__epoch_done = False
         self.__training_alphabet_num = len(self.training_alphabets.keys())
         self.__evaluation_alphabet_list = list(self.evaluation_alphabets.keys())
@@ -49,9 +70,6 @@ class OmniglotLoader():
         if training:
             self.__symbols_list = list(self.training_alphabets[self.__training_alphabet_list[self.__current_alphabet_index]].keys())
         else:
-            #print(type(self.evaluation_alphabets[self.__evaluation_alphabet_list[self.__current_alphabet_index]]))
-            #print(self.evaluation_alphabets[self.__evaluation_alphabet_list[self.__current_alphabet_index]])
-            #print(self.training_alphabets[self.__training_alphabet_list[self.__current_alphabet_index]])
             self.__symbols_list = list(self.evaluation_alphabets[self.__evaluation_alphabet_list[self.__current_alphabet_index]].keys())
 
     def is_evaluation_done(self):
@@ -73,6 +91,19 @@ class OmniglotLoader():
         self.use_transformations = use_transformations
 
     def __create_alphabets(self):
+        '''
+            Arrange all the images of symbols into lists and dictionaries.
+            The function reads all the images sorted by folders.
+            The folder structure for Omniglot dataset should look like this
+            Omniglot
+                |-images_background
+                    |-Arcadian
+                        |-character01
+                            |-img01.png
+                            |-img02.png
+                            ...
+                |-images_evaluation
+        '''
         
         training_path = os.path.join(self.path, self.background_dir)
         training_alphabets = {}
@@ -110,37 +141,6 @@ class OmniglotLoader():
         testing_keys = [list(self.training_alphabets.keys())[i] for i in testing_indices]
         return (training_keys, testing_keys)
 
-    def create_training_pairs(self):
-        #training_path = os.path.join(self.path, )
-        alphabets = {}
-        for alphabet in self.training_keys:
-            #alphabet_path == os.path.join(training_path, alphabet)
-            symbol_dict = {}
-            for symbol in self.training_alphabets[alphabet]:
-                symbol_paths = [os.path.join(self.path, 'images_background', alphabet, symbol, img) for img in os.listdir(os.path.join(self.path, 'images_background', alphabet, symbol))]
-                symbol_dict[symbol] = [self.__get_image(img_path) for img_path in symbol_paths]
-                
-            alphabets[alphabet] = symbol_dict
-        #print(alphabets[self.training_keys[0]]['character01'])
-        self.image_alphabets = alphabets
-        pairs = []
-        labels = []
-        for alphabet in self.image_alphabets:
-            for symbol in self.image_alphabets[alphabet].keys():
-                for img in self.image_alphabets[alphabet][symbol]:
-                    same_imgs = random.sample(range(0, 20), 10)
-                    
-                    test_case = img
-                    for i in same_imgs:
-                        image = alphabets[alphabet][symbol][i]
-                        if self.use_transformations:
-                            image = self.__transform_image(image)
-                        pairs += [[test_case, image]]
-
-                        #random_img = self.__get_random_image(alphabet)
-                        #pairs += [[test_case, random_img]]
-                        labels += [1, 0]
-
     def create_pairs(self, directory, alphabets, keys):
         image_alphabets = {}
         for alphabet in keys:
@@ -175,6 +175,10 @@ class OmniglotLoader():
         """
             Gets a random image of a random symbol from a random alphabet.
             Current alphabet is excluded.
+            Params:
+                - current_alphabet = name of current alphabet
+                - alphabet_dict = dictionary of alphabets
+                - directory = string that points to the evaluation or training directory 
         """
         keys = set(alphabet_dict.keys())
         keys.remove(current_alphabet)
@@ -190,11 +194,15 @@ class OmniglotLoader():
 
 
     def get_training_batch(self):
-        directory = self.background_dir        
+        '''
+            Returns one batch from training dataset.
+
+        '''
+        directory = self.background_dir
         pairs = []
         labels = []
 
-        images = random.sample(range(0, 20), 11)
+        images = random.sample(range(0, 20), int((self.batch_size / 2) + 1)) # 11
         current_alphabet = self.__training_alphabet_list[self.__current_alphabet_index]
         current_symbol = self.__symbols_list[self.__current_symbol_index]
         current_image = self.__get_image(os.path.join(self.path, directory, current_alphabet, current_symbol, self.training_alphabets[current_alphabet][current_symbol][0]))
@@ -214,7 +222,7 @@ class OmniglotLoader():
             random_img = self.__get_random_image(current_alphabet, self.training_alphabets, self.background_dir)
             pairs += [[current_image, random_img]]
             labels += [1, 0]
-
+        # TODO test with change symbol function
         self.__current_symbol_index += 1
         if self.__current_symbol_index == len(self.training_alphabets[current_alphabet]):
             self.__current_symbol_index = 0
@@ -229,6 +237,16 @@ class OmniglotLoader():
         return pairs, np.array(labels)
 
     def __transform_image(self, img):
+        '''
+            Function that performs random affine transformations for given image.
+            Transformation will occur with probability of 50%.
+            
+            Arguments:
+                - img = image to be transformed
+            
+            Returns:
+                - transformed = transformed image
+        '''
         theta = 0
         dx, dy = 0, 0
         sx, sy = 1, 1
@@ -249,51 +267,69 @@ class OmniglotLoader():
 
         transform_map = AffineTransform(scale=(sx, sy), rotation=np.deg2rad(theta), shear=shear_factor, translation=(dx, dy))
         transformed = warp(img, inverse_map=transform_map, preserve_range=True)
-        '''
-        plt.figure(0, figsize=(8, 3))
-        plt.axis('off')
-        plt.imshow(transformed, cmap='gray')
-        plt.show()
-        '''
+
         return transformed
 
     def __get_image(self, path):
+        '''
+            Gets image from given path. Since Omniglot images are black with white background, 
+            image will be inverted to be easier to use with affine transformations
+            
+            Arguments:
+                - path = path to image
+            
+            Returns:
+                - inverted = transformed image
+        '''
         img = plt.imread(path)
         img = img.reshape(105, 105, 1)
         # Invert image to be easier to use with affine transformations
         inverted = util.invert(img)
         return inverted
 
-    def get_random_batch(self, directory, test_batch):
+    def get_random_batch(self, test_batch):
+        '''
+            Gets one random batch with images and their labels. Alternate between positive and negative labels.
+
+            Arguments:
+                - test_batch = flag indicating is this a test or training batch (should the training or evaluation dataset be used)
+
+            Returns:
+                - pairs = pairs of images
+                - labels = labels for pairs
+        '''
         pairs = []
         labels = []
 
-        images = random.sample(range(0, 20), 11)
+        images = random.sample(range(0, 20), int((self.batch_size / 2) + 1)) # 11
+        # Get one random image of a current symbol, whether it is training or evaluation symbol.
         if test_batch:
             random_alphabet_idx = random.randint(0, len(self.__evaluation_alphabet_list) - 1)
             random_alphabet = self.__evaluation_alphabet_list[random_alphabet_idx]
             symbols_list = list(self.evaluation_alphabets[random_alphabet].keys())
             random_symbol_idx = random.randint(0, len(symbols_list) - 1)
             random_symbol = symbols_list[random_symbol_idx]
-            current_image = self.__get_image(os.path.join(self.path, directory, random_alphabet, random_symbol, self.evaluation_alphabets[random_alphabet][random_symbol][0]))
+            current_image = self.__get_image(os.path.join(self.path, self.evaluation_dir, random_alphabet, random_symbol, self.evaluation_alphabets[random_alphabet][random_symbol][0]))
         else:
             random_alphabet_idx = random.randint(0, len(self.__training_alphabet_list) - 1)
             random_alphabet = self.__training_alphabet_list[random_alphabet_idx]
             symbols_list = list(self.training_alphabets[random_alphabet].keys())
             random_symbol_idx = random.randint(0, len(symbols_list) - 1)
             random_symbol = symbols_list[random_symbol_idx]
-            current_image = self.__get_image(os.path.join(self.path, directory, random_alphabet, random_symbol, self.training_alphabets[random_alphabet][random_symbol][0]))
+            current_image = self.__get_image(os.path.join(self.path, self.background_dir, random_alphabet, random_symbol, self.training_alphabets[random_alphabet][random_symbol][0]))
         
         for img in images[1:]:
+            # Get one of the other images and create positive pair.
             if test_batch:
-                second_image = self.__get_image(os.path.join(self.path, directory, random_alphabet, random_symbol, self.evaluation_alphabets[random_alphabet][random_symbol][img]))
+                second_image = self.__get_image(os.path.join(self.path, self.evaluation_dir, random_alphabet, random_symbol, self.evaluation_alphabets[random_alphabet][random_symbol][img]))
             else:
-                second_image = self.__get_image(os.path.join(self.path, directory, random_alphabet, random_symbol, self.training_alphabets[random_alphabet][random_symbol][img]))
+                second_image = self.__get_image(os.path.join(self.path, self.background_dir, random_alphabet, random_symbol, self.training_alphabets[random_alphabet][random_symbol][img]))
             
             if self.use_transformations:
                 second_image = self.__transform_image(second_image)
             pairs += [[current_image, second_image]]
 
+            # Get one random image to create negative pair.
             if test_batch:
                 random_img = self.__get_random_image(random_alphabet, self.evaluation_alphabets, self.evaluation_dir)
             else:
@@ -304,6 +340,16 @@ class OmniglotLoader():
         return np.array(pairs), np.array(labels)
 
     def get_positive_batch(self, training):
+        '''
+            Gets a batch of positive pairs from dataset.
+
+            Arguments:
+                - training = flag indicating should the training or evaluation dataset be used.
+
+            Returns:
+                - pairs = pairs of images
+                - labels = labels for pairs
+        '''
         pairs = []
         labels = []
 
@@ -335,6 +381,16 @@ class OmniglotLoader():
         return np.array(pairs), np.array(labels)
 
     def get_negative_batch(self, training):
+        '''
+            Gets a batch of negative pairs from dataset.
+
+            Arguments:
+                - training = flag indicating should the training or evaluation dataset be used.
+
+            Returns:
+                - pairs = pairs of images
+                - labels = labels for pairs
+        '''
         pairs = []
         labels = []
 
@@ -368,29 +424,46 @@ class OmniglotLoader():
         return np.array(pairs), np.array(labels)
 
     def __change_symbol(self, training):
+        '''
+            Private function to be used for selecting next symbol after all the data for batch has been prepared.
+
+            Arguments:
+                - training = flag indicating should the training or evaluation dataset be used.
+        '''
         self.__current_symbol_index += 1
         if training:
             current_alphabet = self.__training_alphabet_list[self.__current_alphabet_index]
             if self.__current_symbol_index == len(self.training_alphabets[current_alphabet]):
+                # If we reached last symbol, it is neccessary to reset the counter and change the alphabet.
                 self.__current_symbol_index = 0
                 self.__current_alphabet_index += 1
                 print(str(round((self.__current_alphabet_index / self.__training_alphabet_num) * 100.00, 2)) + ' %% of alphabets done')
                 if self.__current_alphabet_index == len(self.training_alphabets):
+                # If we reached last alphabet, it is neccessary to reset the counter and start a new epoch.
                     self.__current_alphabet_index = 0
                     self.__epoch_done = True
                 self.__symbols_list = list(self.training_alphabets[self.__training_alphabet_list[self.__current_alphabet_index]].keys())
         else:
             current_alphabet = self.__evaluation_alphabet_list[self.__current_alphabet_index]
             if self.__current_symbol_index == len(self.evaluation_alphabets[current_alphabet]):
+            # If we reached last symbol, it is neccessary to reset the counter and change the alphabet.
                 self.__current_symbol_index = 0
                 self.__current_alphabet_index += 1
                 print(str(round((self.__current_alphabet_index / self.__evaluation_alphabet_num) * 100.00, 2)) + ' %% of alphabets done')
                 if self.__current_alphabet_index == len(self.evaluation_alphabets):
+                # If we reached last alphabet, it is neccessary to reset the counter and start a new epoch.
                     self.__current_alphabet_index = 0
                     self.__epoch_done = True
                 self.__symbols_list = list(self.evaluation_alphabets[self.__evaluation_alphabet_list[self.__current_alphabet_index]].keys())
 
     def get_test_batch(self):
+        '''
+            Gets one batch from evaluation set.
+
+            Returns:
+                - pairs = pairs of images
+                - labels = labels for pairs
+        '''
         directory = self.evaluation_dir
         pairs = []
         labels = []
@@ -399,12 +472,12 @@ class OmniglotLoader():
         current_alphabet = self.__evaluation_alphabet_list[self.__current_alphabet_index]
         current_symbol = self.__symbols_list[self.__current_symbol_index]
         current_image = self.__get_image(os.path.join(self.path, directory, current_alphabet, current_symbol, self.evaluation_alphabets[current_alphabet][current_symbol][0]))
-
-        print('============================================================')
-        print('Current alphabet: ' + current_alphabet)
-        print('Current symbol: ' + current_symbol)
-        print('Current symbol: ' + str(self.__current_symbol_index))
-
+        '''
+            print('============================================================')
+            print('Current alphabet: ' + current_alphabet)
+            print('Current symbol: ' + current_symbol)
+            print('Current symbol: ' + str(self.__current_symbol_index))
+        '''
         for img in images[1:]:
             second_image = self.__get_image(os.path.join(self.path, directory, current_alphabet, current_symbol, self.evaluation_alphabets[current_alphabet][current_symbol][img]))
             
@@ -426,5 +499,4 @@ class OmniglotLoader():
                 self.__evaluation_done = True
             self.__symbols_list = list(self.evaluation_alphabets[self.__evaluation_alphabet_list[self.__current_alphabet_index]].keys())
         
-        pairs = np.array(pairs)
-        return pairs, np.array(labels)
+        return np.array(pairs), np.array(labels)
