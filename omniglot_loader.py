@@ -30,13 +30,16 @@ class OmniglotLoader():
         self.scale_range = scale_range
         self.shift_range = shift_range
         self.batch_size = batch_size
+
         # Directories for training and evaluation dataset
-        self.background_dir = 'images_background'
-        self.evaluation_dir = 'images_evaluation' #'nn_test'
+        self.background_dir = 'nn' #'images_background'
+        self.evaluation_dir = 'nn_test' #'images_evaluation' #'nn_test'
         self.use_transformations = use_transformations
+
         # Reading alphabets and creating dictinaries
         self.training_alphabets, self.evaluation_alphabets = self.__create_alphabets()
         self.training_keys, self.testing_keys = self.__split_train_sets()
+
         # Creating a series of lists and indexes that will be used during sending batches
         # Because it is important to go through entire dataset for each epoch, 
         # it is necessary to  keep track of where we are for each batch.
@@ -44,6 +47,7 @@ class OmniglotLoader():
         self.__training_alphabet_list = list(self.training_alphabets.keys())
         self.__symbols_list = list(self.training_alphabets[self.__training_alphabet_list[self.__current_alphabet_index]].keys())
         self.__current_symbol_index = 0
+
         # Flag to indicate if the current epoch is done
         self.__epoch_done = False
         self.__training_alphabet_num = len(self.training_alphabets.keys())
@@ -90,57 +94,9 @@ class OmniglotLoader():
     def set_use_transformations(self, use_transformations):
         self.use_transformations = use_transformations
 
-    def __create_alphabets(self):
-        '''
-            Arrange all the images of symbols into lists and dictionaries.
-            The function reads all the images sorted by folders.
-            The folder structure for Omniglot dataset should look like this
-            Omniglot
-                |-images_background
-                    |-Arcadian
-                        |-character01
-                            |-img01.png
-                            |-img02.png
-                            ...
-                |-images_evaluation
-        '''
-        
-        training_path = os.path.join(self.path, self.background_dir)
-        training_alphabets = {}
-        for alphabet in os.listdir(training_path):
-            
-            print('Processing: ' + alphabet)
-            characters = {}
-            for char in os.listdir(os.path.join(training_path, alphabet)):
-                characters[char] = [img for img in os.listdir(os.path.join(training_path, alphabet, char))]
-            training_alphabets[alphabet] = characters
-        
-        evaluation_path = os.path.join(self.path, self.evaluation_dir)
-        evaluation_alphabets = {}
-        for alphabet in os.listdir(evaluation_path):
-            
-            print('Processing: ' + alphabet)
-            characters = {}
-            for char in os.listdir(os.path.join(evaluation_path, alphabet)):
-                characters[char] = [img for img in os.listdir(os.path.join(evaluation_path, alphabet, char))]
-            
-            evaluation_alphabets[alphabet] = characters
-        
-        return (training_alphabets, evaluation_alphabets)
-
-    def __split_train_sets(self):
-        """
-            Perform training and testing split at 80% - 20%"
-        """
-        
-        alphabet_indices = list(range(len(self.training_alphabets)))
-        training_indices = random.sample(range(0, len(self.training_alphabets) - 1), k=int(0.8*len(self.training_alphabets)))
-        testing_indices = set(alphabet_indices) - set(training_indices)
-
-        training_keys = [list(self.training_alphabets.keys())[i] for i in training_indices]
-        testing_keys = [list(self.training_alphabets.keys())[i] for i in testing_indices]
-        return (training_keys, testing_keys)
-
+    ####################################################################
+    # Various public functions                                         #
+    ####################################################################
     def create_pairs(self, directory, alphabets, keys):
         image_alphabets = {}
         for alphabet in keys:
@@ -171,32 +127,12 @@ class OmniglotLoader():
 
         return np.array(pairs), np.array(labels)
 
-    def __get_random_image(self, current_alphabet, alphabet_dict, directory):
-        """
-            Gets a random image of a random symbol from a random alphabet.
-            Current alphabet is excluded.
-            Params:
-                - current_alphabet = name of current alphabet
-                - alphabet_dict = dictionary of alphabets
-                - directory = string that points to the evaluation or training directory 
-        """
-        keys = set(alphabet_dict.keys())
-        keys.remove(current_alphabet)
-        alphabet_sample = keys
-        random_alphabet = random.choice(list(alphabet_sample))
-        random_symbol = random.choice(list(alphabet_dict[random_alphabet]))
-        random_idx = random.randint(0, 19)
-
-        random_img = self.__get_image(os.path.join(self.path, directory, random_alphabet, random_symbol, alphabet_dict[random_alphabet][random_symbol][random_idx]))
-        if self.use_transformations:
-            random_img = self.__transform_image(random_img)
-        return random_img
-
-
+    ####################################################################
+    # Functions for getting various batches                            #
+    ####################################################################
     def get_training_batch(self):
         '''
-            Returns one batch from training dataset.
-
+            Returns one batch from training dataset. Alternate between positive (1) and negative samples (0).
         '''
         directory = self.background_dir
         pairs = []
@@ -206,12 +142,14 @@ class OmniglotLoader():
         current_alphabet = self.__training_alphabet_list[self.__current_alphabet_index]
         current_symbol = self.__symbols_list[self.__current_symbol_index]
         current_image = self.__get_image(os.path.join(self.path, directory, current_alphabet, current_symbol, self.training_alphabets[current_alphabet][current_symbol][0]))
+        
         '''
         print('============================================================')
         print('Current alphabet: ' + current_alphabet)
         print('Current symbol: ' + current_symbol)
         print('Current symbol: ' + str(self.__current_symbol_index))
         '''
+
         for img in images[1:]:
             second_image = self.__get_image(os.path.join(self.path, directory, current_alphabet, current_symbol, self.training_alphabets[current_alphabet][current_symbol][img]))
             
@@ -222,7 +160,9 @@ class OmniglotLoader():
             random_img = self.__get_random_image(current_alphabet, self.training_alphabets, self.background_dir)
             pairs += [[current_image, random_img]]
             labels += [1, 0]
-        # TODO test with change symbol function
+
+        # TODO: test with change symbol function
+        '''
         self.__current_symbol_index += 1
         if self.__current_symbol_index == len(self.training_alphabets[current_alphabet]):
             self.__current_symbol_index = 0
@@ -232,60 +172,11 @@ class OmniglotLoader():
                 self.__current_alphabet_index = 0
                 self.__epoch_done = True
             self.__symbols_list = list(self.training_alphabets[self.__training_alphabet_list[self.__current_alphabet_index]].keys())
-                
-        pairs = np.array(pairs)
-        return pairs, np.array(labels)
-
-    def __transform_image(self, img):
         '''
-            Function that performs random affine transformations for given image.
-            Transformation will occur with probability of 50%.
-            
-            Arguments:
-                - img = image to be transformed
-            
-            Returns:
-                - transformed = transformed image
-        '''
-        theta = 0
-        dx, dy = 0, 0
-        sx, sy = 1, 1
-        shear_factor = 0
-        # Calculating transformation
-        if np.random.uniform(low=0, high=1) < 0.5:
-            theta = np.random.uniform(low=self.rotation_range[0], high=self.rotation_range[1])
-        if np.random.uniform(low=0, high=1) < 0.5:
-            dx = np.random.uniform(low=self.shift_range[0], high=self.shift_range[1])
-        if np.random.uniform(low=0, high=1) < 0.5:
-            dy = np.random.uniform(low=self.shift_range[0], high=self.shift_range[1])
-        if np.random.uniform(low=0, high=1) < 0.5:
-            sx = np.random.uniform(low=self.scale_range[0], high=self.scale_range[1])
-        if np.random.uniform(low=0, high=1) < 0.5:
-            sy = np.random.uniform(low=self.scale_range[0], high=self.scale_range[1])
-        if np.random.uniform(low=0, high=1) < 0.5:
-            shear_factor = np.random.uniform(low=self.shear_range[0], high=self.shear_range[1])
 
-        transform_map = AffineTransform(scale=(sx, sy), rotation=np.deg2rad(theta), shear=shear_factor, translation=(dx, dy))
-        transformed = warp(img, inverse_map=transform_map, preserve_range=True)
+        self.__change_symbol(True)
 
-        return transformed
-
-    def __get_image(self, path):
-        '''
-            Gets image from given path. Since Omniglot images are black with white background, 
-            image will be inverted to be easier to use with affine transformations
-            
-            Arguments:
-                - path = path to image
-            
-            Returns:
-                - inverted = transformed image
-        '''
-        img = plt.imread(path)
-        img = img.reshape(105, 105, 1)
-        # Invert image to be easier to use with affine transformations
-        inverted = util.invert(img)
-        return inverted
+        return np.array(pairs), np.array(labels)
 
     def get_random_batch(self, test_batch):
         '''
@@ -302,6 +193,7 @@ class OmniglotLoader():
         labels = []
 
         images = random.sample(range(0, 20), int((self.batch_size / 2) + 1)) # 11
+
         # Get one random image of a current symbol, whether it is training or evaluation symbol.
         if test_batch:
             random_alphabet_idx = random.randint(0, len(self.__evaluation_alphabet_list) - 1)
@@ -319,6 +211,7 @@ class OmniglotLoader():
             current_image = self.__get_image(os.path.join(self.path, self.background_dir, random_alphabet, random_symbol, self.training_alphabets[random_alphabet][random_symbol][0]))
         
         for img in images[1:]:
+
             # Get one of the other images and create positive pair.
             if test_batch:
                 second_image = self.__get_image(os.path.join(self.path, self.evaluation_dir, random_alphabet, random_symbol, self.evaluation_alphabets[random_alphabet][random_symbol][img]))
@@ -423,6 +316,108 @@ class OmniglotLoader():
 
         return np.array(pairs), np.array(labels)
 
+    def get_test_batch(self):
+        '''
+            Gets one batch from evaluation set.
+
+            Returns:
+                - pairs = pairs of images
+                - labels = labels for pairs
+        '''
+        directory = self.evaluation_dir
+        pairs = []
+        labels = []
+
+        images = random.sample(range(0, 20), 11)
+        current_alphabet = self.__evaluation_alphabet_list[self.__current_alphabet_index]
+        current_symbol = self.__symbols_list[self.__current_symbol_index]
+        current_image = self.__get_image(os.path.join(self.path, directory, current_alphabet, current_symbol, self.evaluation_alphabets[current_alphabet][current_symbol][0]))
+        
+        '''
+            print('============================================================')
+            print('Current alphabet: ' + current_alphabet)
+            print('Current symbol: ' + current_symbol)
+            print('Current symbol: ' + str(self.__current_symbol_index))
+        '''
+        
+        for img in images[1:]:
+            second_image = self.__get_image(os.path.join(self.path, directory, current_alphabet, current_symbol, self.evaluation_alphabets[current_alphabet][current_symbol][img]))
+            
+            if self.use_transformations:
+                second_image = self.__transform_image(second_image)
+            pairs += [[current_image, second_image]]
+
+            random_img = self.__get_random_image(current_alphabet, self.evaluation_alphabets, self.evaluation_dir)
+            pairs += [[current_image, random_img]]
+            labels += [1, 0]
+
+        self.__current_symbol_index += 1
+        if self.__current_symbol_index == len(self.evaluation_alphabets[current_alphabet]):
+            self.__current_symbol_index = 0
+            self.__current_alphabet_index += 1
+            print(str(round((self.__current_alphabet_index / self.__evaluation_alphabet_num) * 100.0, 2)) + ' % of alphabets done')
+            if self.__current_alphabet_index == len(self.evaluation_alphabets):
+                self.__current_alphabet_index = 0
+                self.__evaluation_done = True
+            self.__symbols_list = list(self.evaluation_alphabets[self.__evaluation_alphabet_list[self.__current_alphabet_index]].keys())
+        
+        return np.array(pairs), np.array(labels)
+
+    ####################################################################
+    # Various private functions                                        #
+    ####################################################################
+    def __transform_image(self, img):
+        '''
+            Function that performs random affine transformations for given image.
+            Transformation will occur with probability of 50%.
+            
+            Arguments:
+                - img = image to be transformed
+            
+            Returns:
+                - transformed = transformed image
+        '''
+        theta = 0
+        dx, dy = 0, 0
+        sx, sy = 1, 1
+        shear_factor = 0
+
+        # Calculating transformation
+        if np.random.uniform(low=0, high=1) < 0.5:
+            theta = np.random.uniform(low=self.rotation_range[0], high=self.rotation_range[1])
+        if np.random.uniform(low=0, high=1) < 0.5:
+            dx = np.random.uniform(low=self.shift_range[0], high=self.shift_range[1])
+        if np.random.uniform(low=0, high=1) < 0.5:
+            dy = np.random.uniform(low=self.shift_range[0], high=self.shift_range[1])
+        if np.random.uniform(low=0, high=1) < 0.5:
+            sx = np.random.uniform(low=self.scale_range[0], high=self.scale_range[1])
+        if np.random.uniform(low=0, high=1) < 0.5:
+            sy = np.random.uniform(low=self.scale_range[0], high=self.scale_range[1])
+        if np.random.uniform(low=0, high=1) < 0.5:
+            shear_factor = np.random.uniform(low=self.shear_range[0], high=self.shear_range[1])
+
+        transform_map = AffineTransform(scale=(sx, sy), rotation=np.deg2rad(theta), shear=shear_factor, translation=(dx, dy))
+        transformed = warp(img, inverse_map=transform_map, preserve_range=True)
+
+        return transformed
+
+    def __get_image(self, path):
+        '''
+            Gets image from given path. Since Omniglot images are black with white background, 
+            image will be inverted to be easier to use with affine transformations
+            
+            Arguments:
+                - path = path to image
+            
+            Returns:
+                - inverted = transformed image
+        '''
+        img = plt.imread(path)
+        img = img.reshape(105, 105, 1)
+        # Invert image to be easier to use with affine transformations
+        inverted = util.invert(img)
+        return inverted
+
     def __change_symbol(self, training):
         '''
             Private function to be used for selecting next symbol after all the data for batch has been prepared.
@@ -456,47 +451,74 @@ class OmniglotLoader():
                     self.__epoch_done = True
                 self.__symbols_list = list(self.evaluation_alphabets[self.__evaluation_alphabet_list[self.__current_alphabet_index]].keys())
 
-    def get_test_batch(self):
-        '''
-            Gets one batch from evaluation set.
+    def __get_random_image(self, current_alphabet, alphabet_dict, directory):
+        """
+            Gets a random image of a random symbol from a random alphabet.
+            Current alphabet is excluded.
+            Params:
+                - current_alphabet = name of current alphabet
+                - alphabet_dict = dictionary of alphabets
+                - directory = string that points to the evaluation or training directory 
+        """
+        keys = set(alphabet_dict.keys())
+        keys.remove(current_alphabet)
+        alphabet_sample = keys
+        random_alphabet = random.choice(list(alphabet_sample))
+        random_symbol = random.choice(list(alphabet_dict[random_alphabet]))
+        random_idx = random.randint(0, 19)
 
-            Returns:
-                - pairs = pairs of images
-                - labels = labels for pairs
-        '''
-        directory = self.evaluation_dir
-        pairs = []
-        labels = []
+        random_img = self.__get_image(os.path.join(self.path, directory, random_alphabet, random_symbol, alphabet_dict[random_alphabet][random_symbol][random_idx]))
+        if self.use_transformations:
+            random_img = self.__transform_image(random_img)
+        return random_img
 
-        images = random.sample(range(0, 20), 11)
-        current_alphabet = self.__evaluation_alphabet_list[self.__current_alphabet_index]
-        current_symbol = self.__symbols_list[self.__current_symbol_index]
-        current_image = self.__get_image(os.path.join(self.path, directory, current_alphabet, current_symbol, self.evaluation_alphabets[current_alphabet][current_symbol][0]))
+    def __create_alphabets(self):
         '''
-            print('============================================================')
-            print('Current alphabet: ' + current_alphabet)
-            print('Current symbol: ' + current_symbol)
-            print('Current symbol: ' + str(self.__current_symbol_index))
+            Arrange all the images of symbols into lists and dictionaries.
+            The function reads all the images sorted by folders.
+            The folder structure for Omniglot dataset should look like this
+            Omniglot
+                |-images_background
+                    |-Arcadian
+                        |-character01
+                            |-img01.png
+                            |-img02.png
+                            ...
+                |-images_evaluation
         '''
-        for img in images[1:]:
-            second_image = self.__get_image(os.path.join(self.path, directory, current_alphabet, current_symbol, self.evaluation_alphabets[current_alphabet][current_symbol][img]))
-            
-            if self.use_transformations:
-                second_image = self.__transform_image(second_image)
-            pairs += [[current_image, second_image]]
-
-            random_img = self.__get_random_image(current_alphabet, self.evaluation_alphabets, self.evaluation_dir)
-            pairs += [[current_image, random_img]]
-            labels += [1, 0]
-
-        self.__current_symbol_index += 1
-        if self.__current_symbol_index == len(self.evaluation_alphabets[current_alphabet]):
-            self.__current_symbol_index = 0
-            self.__current_alphabet_index += 1
-            print(str(round((self.__current_alphabet_index / self.__evaluation_alphabet_num) * 100.0, 2)) + ' % of alphabets done')
-            if self.__current_alphabet_index == len(self.evaluation_alphabets):
-                self.__current_alphabet_index = 0
-                self.__evaluation_done = True
-            self.__symbols_list = list(self.evaluation_alphabets[self.__evaluation_alphabet_list[self.__current_alphabet_index]].keys())
         
-        return np.array(pairs), np.array(labels)
+        training_path = os.path.join(self.path, self.background_dir)
+        training_alphabets = {}
+        for alphabet in os.listdir(training_path):
+            
+            print('Processing: ' + alphabet)
+            characters = {}
+            for char in os.listdir(os.path.join(training_path, alphabet)):
+                characters[char] = [img for img in os.listdir(os.path.join(training_path, alphabet, char))]
+            training_alphabets[alphabet] = characters
+        
+        evaluation_path = os.path.join(self.path, self.evaluation_dir)
+        evaluation_alphabets = {}
+        for alphabet in os.listdir(evaluation_path):
+            
+            print('Processing: ' + alphabet)
+            characters = {}
+            for char in os.listdir(os.path.join(evaluation_path, alphabet)):
+                characters[char] = [img for img in os.listdir(os.path.join(evaluation_path, alphabet, char))]
+            
+            evaluation_alphabets[alphabet] = characters
+        
+        return (training_alphabets, evaluation_alphabets)
+
+    def __split_train_sets(self):
+        """
+            Perform training and testing split at 80% - 20%"
+        """
+        
+        alphabet_indices = list(range(len(self.training_alphabets)))
+        training_indices = random.sample(range(0, len(self.training_alphabets) - 1), k=int(0.8*len(self.training_alphabets)))
+        testing_indices = set(alphabet_indices) - set(training_indices)
+
+        training_keys = [list(self.training_alphabets.keys())[i] for i in training_indices]
+        testing_keys = [list(self.training_alphabets.keys())[i] for i in testing_indices]
+        return (training_keys, testing_keys)

@@ -98,6 +98,9 @@ class SiameseNetwork:
         model.compile(loss='binary_crossentropy', metrics=['binary_accuracy', 'mse', 'mae', 'acc'], optimizer='sgd')
         return model
 
+    ####################################################################
+    # Train and testing methods                                        #
+    ####################################################################
     def train(self, omniglot, epoch_num):
         '''
             Trains the network for given number of epochs
@@ -117,6 +120,8 @@ class SiameseNetwork:
         if not os.path.exists(self.__test_dir):
             os.makedirs(self.__test_dir)
 
+        # Create two tensorboards, one to monitor training results, 
+        # other to monitor evaluation results
         tensorboard = TensorBoard(
             log_dir=self.__train_dir,
             histogram_freq=0,
@@ -132,6 +137,7 @@ class SiameseNetwork:
             write_graph=True,
             write_grads=True)
         tensorboard_eval.set_model(self.model)
+
         print('Training started.')
         while True:
             if epoch_id >= epoch_num:
@@ -140,30 +146,33 @@ class SiameseNetwork:
             images, labels = omniglot.get_training_batch()
             self.model.train_on_batch([images[:, 0], images[:, 1]], labels)
 
-            # Decay learning rate by 1% after each epoch
             if omniglot.is_epoch_done():
                 print('Epoch #' + str(epoch_id) + ' end.')
                 epoch_id += 1
                 print('Epoch #' + str(epoch_id) + ' start.')
                 omniglot.set_epoch_done(False)
-                K.set_value(self.model.optimizer.lr, (K.get_value(self.model.optimizer.lr) * 0.99))
-                te_images, te_labels = omniglot.get_random_batch('images_background', False)
 
-                ev_images, ev_labels = omniglot.get_random_batch('images_evaluation', True)
+                # Decay learning rate by 1% after each epoch
+                K.set_value(self.model.optimizer.lr, (K.get_value(self.model.optimizer.lr) * 0.99))
+
+                te_images, te_labels = omniglot.get_random_batch(False)
+                ev_images, ev_labels = omniglot.get_random_batch(True)
                 
                 tr_logs = self.model.test_on_batch([te_images[:, 0], te_images[:, 1]], te_labels)
                 ev_logs = self.model.test_on_batch([ev_images[:, 0], ev_images[:, 1]], ev_labels)
+                
                 tensorboard.on_epoch_end(epoch_id, self.named_logs(tr_logs))
                 tensorboard_eval.on_epoch_end(epoch_id, self.named_logs(ev_logs))
 
         print('Training finished.')
-
         print('Saving model...')
         model_json = self.model.to_json()
         with open(os.path.join(self.__save_dir, 'model.json'), "w") as json_file:
             json_file.write(model_json)
+        
         self.model.save_weights(os.path.join(self.__save_dir, 'model_weights.h5'))
         self.model.save(os.path.join(self.__save_dir, 'model.h5'))
+
         print('Model saved successfully')
 
     def test(self, omniglot):
@@ -201,6 +210,71 @@ class SiameseNetwork:
         print('Testing finished.')
         print('Overall accuracy: ' + str(np.mean(accuracy)))
 
+    ####################################################################
+    # Methods for getting results for confusion matrix                 #
+    ####################################################################
+    def test_tn_fp(self, omniglot):
+        '''
+            Performs testing of true negatives and false positives on the network
+
+            Arguments:
+                - omniglot = instance of OmniglotLoader
+        '''
+        print('Testing false positives and true negatives started.')
+        omniglot.set_current_alphabet_index(0)
+        omniglot.set_training_evaluation_symbols(False)
+        omniglot.set_epoch_done(False)
+        
+        if not os.path.exists(self.__confusion_matrix_dir):
+            os.makedirs(self.__confusion_matrix_dir)
+        
+        # Create arrays for each case, where each digit represents number of samples for given dictionary
+        false_positives_low = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        false_positives_high = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        true_negatives_low = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        true_negatives_high = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+        y_pred = []
+        while True:
+            images, _ = omniglot.get_negative_batch(False)
+            predictions = self.model.predict_on_batch([images[:, 0], images[:, 1]])
+            y_pred.append(predictions)
+
+            # Calculate number of true positives and false negatives, 
+            # where both of them contain their low and high subclass. 
+            # Low true negatives are the ones for which prediction is below 0.25, while those that are 
+            # equal or aobve 0.25 and below 0.5 are high true negatives.
+            # Low false positives are the ones for which prediction above or equal 0.5 and below 0.75, 
+            # while those that are equal or aobve 0.75 are high false positives.
+            for i in range(len(predictions)):
+                if predictions[i] < 0.25:
+                    true_negatives_low[omniglot.get_current_alphabet_index()] += 1
+                elif predictions[i] >= 0.25 and predictions[i] < 0.5:
+                    true_negatives_high[omniglot.get_current_alphabet_index()] += 1
+                elif predictions[i] >= 0.5 and predictions[i] < 0.75:
+                    false_positives_low[omniglot.get_current_alphabet_index()] += 1
+                elif predictions[i] >= 0.75:
+                    false_positives_high[omniglot.get_current_alphabet_index()] += 1
+
+            # print('Current alphabet: ' + str(omniglot.get_current_alphabet_index()))
+            if omniglot.is_epoch_done() == True:
+                break
+
+        # Serialize true positives and false negatives
+        np.save(os.path.join(self.__confusion_matrix_dir, 'true_negatives_low'), true_negatives_low)
+        np.save(os.path.join(self.__confusion_matrix_dir, 'true_negatives_high'), true_negatives_high)
+        np.save(os.path.join(self.__confusion_matrix_dir, 'false_positives_low'), false_positives_low)
+        np.save(os.path.join(self.__confusion_matrix_dir, 'false_positives_high'), false_positives_high)
+
+        # Manually compute accuracy
+        y_pred = np.array(y_pred)
+        pred = y_pred.ravel() > 0.5
+        pred_sum = np.sum(pred)
+        print('Testing true negatives and false positives finished.')
+        print('Overall accuracy: ' + str((pred_sum / len(pred)) * 100))
+
+        return true_negatives_low, true_negatives_high, false_positives_low, false_positives_high
+
     def test_tp_fn(self, omniglot):
         '''
             Performs testing of true positives and false negatives on the network
@@ -217,7 +291,7 @@ class SiameseNetwork:
         if not os.path.exists(self.__confusion_matrix_dir):
             os.makedirs(self.__confusion_matrix_dir)
 
-        # [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]
+        # Create arrays for each case, where each digit represents number of samples for given dictionary
         true_positives_low = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         true_positives_high = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         false_negatives_low = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -230,117 +304,60 @@ class SiameseNetwork:
             predictions = self.model.predict_on_batch([images[:, 0], images[:, 1]])
             y_pred.append(predictions)
 
+            # Calculate number of true positives and false negatives, 
+            # where both of them contain their low and high subclass.
+            # Low false negatives are the ones for which prediction is below 0.25, while those that are 
+            # equal or aobve 0.25 and below 0.5 are high false negatives.
+            # Low true positives are the ones for which prediction above or equal 0.5 and below 0.75, 
+            # while those that are equal or aobve 0.75 are high true positives.
             for i in range(len(predictions)):
                 if predictions[i] < 0.25:
                     false_negatives_high[omniglot.get_current_alphabet_index()] += 1
-                    #images[0].append(i)
                 elif predictions[i] >= 0.25 and predictions[i] < 0.5:
                     false_negatives_low[omniglot.get_current_alphabet_index()] += 1
-                    #images[1].append(i)
                 elif predictions[i] >= 0.5 and predictions[i] < 0.75:
                     true_positives_low[omniglot.get_current_alphabet_index()] += 1
-                    #images[2].append(i)
                 elif predictions[i] >= 0.75:
                     true_positives_high[omniglot.get_current_alphabet_index()] += 1
-                    #images[3].append(i)
 
-            print('Current alphabet: ' + str(omniglot.get_current_alphabet_index()))
+            # print('Current alphabet: ' + str(omniglot.get_current_alphabet_index()))
             if omniglot.is_epoch_done() == True:
                 break
 
-        #serialize true positives and false negatives
+        # Serialize true positives and false negatives
         np.save(os.path.join(self.__confusion_matrix_dir, 'true_positives_low'), true_positives_low)
         np.save(os.path.join(self.__confusion_matrix_dir, 'true_positives_high'), true_positives_high)
         np.save(os.path.join(self.__confusion_matrix_dir, 'false_negatives_low'), false_negatives_low)
         np.save(os.path.join(self.__confusion_matrix_dir, 'false_negatives_high'), false_negatives_high)
-        print(true_positives_low)
-        print(true_positives_high)
-        print(false_negatives_low)
-        print(false_negatives_high)
+
         # Manually compute accuracy
         y_pred = np.array(y_pred)
         pred = y_pred.ravel() > 0.5
-        y_true = [1] * len(y_pred)
-        accuracy = np.mean(pred == y_true)
-
+        pred_sum = np.sum(pred)
         print('Testing true positives and false negatives finished.')
-        print('Overall accuracy: ' + str(np.mean(accuracy)))
+        print('Overall accuracy: ' + str((pred_sum / len(pred)) * 100))
 
         return true_positives_low, true_positives_high, false_negatives_low, false_negatives_high
 
-    def test_tn_fp(self, omniglot):
+    ####################################################################
+    # Various public functions                                         #
+    ####################################################################
+    def named_logs(self, logs):
         '''
-            Performs testing of true negatives and false positives on the network
+            Method that transforms train_on_batch return value to dictionary expected by on_batch_end callback.
+            Source: https://gist.github.com/erenon/91f526302cd8e9d21b73f24c0f9c4bb8#file-train_on_batch_with_tensorboard-py-L15
 
             Arguments:
-                - omniglot = instance of OmniglotLoader
+                - logs = logs generated by train_on_batch
+
+            Returns:
+                - result = dictionary with logs
         '''
-        print('Testing false positives and true negatives started.')
-        omniglot.set_current_alphabet_index(0)
-        omniglot.set_training_evaluation_symbols(False)
-        omniglot.set_epoch_done(False)
-        
-        if not os.path.exists(self.__confusion_matrix_dir):
-            os.makedirs(self.__confusion_matrix_dir)
-        
-        # [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]
-        false_positives_low = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        false_positives_high = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        true_negatives_low = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        true_negatives_high = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-
-        y_pred = []
-        while True:
-            images, _ = omniglot.get_negative_batch(False)
-            predictions = self.model.predict_on_batch([images[:, 0], images[:, 1]])
-            y_pred.append(predictions)
-
-            for i in range(len(predictions)):
-                if predictions[i] < 0.25:
-                    true_negatives_low[omniglot.get_current_alphabet_index()] += 1
-                    #images[0].append(i)
-                elif predictions[i] >= 0.25 and predictions[i] < 0.5:
-                    true_negatives_high[omniglot.get_current_alphabet_index()] += 1
-                    #images[1].append(i)
-                elif predictions[i] >= 0.5 and predictions[i] < 0.75:
-                    false_positives_low[omniglot.get_current_alphabet_index()] += 1
-                    #images[2].append(i)
-                elif predictions[i] >= 0.75:
-                    false_positives_high[omniglot.get_current_alphabet_index()] += 1
-                    #images[3].append(i)
-
-            print('Current alphabet: ' + str(omniglot.get_current_alphabet_index()))
-            if omniglot.is_epoch_done() == True:
-                break
-
-        #serialize true positives and false negatives
-        np.save(os.path.join(self.__confusion_matrix_dir, 'true_negatives_low'), true_negatives_low)
-        np.save(os.path.join(self.__confusion_matrix_dir, 'true_negatives_high'), true_negatives_high)
-        np.save(os.path.join(self.__confusion_matrix_dir, 'false_positives_low'), false_positives_low)
-        np.save(os.path.join(self.__confusion_matrix_dir, 'false_positives_high'), false_positives_high)
-        #print(true_negatives_low)
-        #print(true_negatives_high)
-        #print(false_positives_low)
-        #print(false_positives_high)
-
-        # Manually compute accuracy
-        y_pred = np.array(y_pred)
-        pred = y_pred.ravel() > 0.5
-        y_true = [0] * len(y_pred)
-        accuracy = np.mean(pred == y_true)
-
-        print('Testing true negatives and false positives finished.')
-        print('Overall accuracy: ' + str(np.mean(accuracy)))
-
-        return true_negatives_low, true_negatives_high, false_positives_low, false_positives_high
-
-    # Transform train_on_batch return value
-    # to dict expected by on_batch_end callback
-    def named_logs(self, logs):
         result = {}
         for l in zip(self.model.metrics_names, logs):
             result[l[0]] = l[1]
         return result
+
 
 
 if __name__ == '__main__':

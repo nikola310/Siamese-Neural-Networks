@@ -7,3 +7,7 @@ doc_tmp/
 Omniglot/
 Omniglot/nn/
 Omniglot/nn_test/
+table_tr_no_tf_te_no_tf.csv
+table_tr_no_tf_te_tf.csv
+table_tr_tf_te_no_tf.csv
+table_tr_tf_te_tf.csv

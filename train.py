@@ -29,4 +29,4 @@ if __name__ == "__main__":
 
     sn = SiameseNetwork()
 
-    sn.train(omg, 200)
+    sn.train(omg, 3)
