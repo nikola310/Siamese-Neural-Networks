@@ -312,9 +312,9 @@ class SiameseNetwork:
             # while those that are equal or aobve 0.75 are high true positives.
             for i in range(len(predictions)):
                 if predictions[i] < 0.25:
-                    false_negatives_high[omniglot.get_current_alphabet_index()] += 1
-                elif predictions[i] >= 0.25 and predictions[i] < 0.5:
                     false_negatives_low[omniglot.get_current_alphabet_index()] += 1
+                elif predictions[i] >= 0.25 and predictions[i] < 0.5:
+                    false_negatives_high[omniglot.get_current_alphabet_index()] += 1
                 elif predictions[i] >= 0.5 and predictions[i] < 0.75:
                     true_positives_low[omniglot.get_current_alphabet_index()] += 1
                 elif predictions[i] >= 0.75:
@@ -378,5 +378,5 @@ if __name__ == '__main__':
     omg = OmniglotLoader(use_transformations=False)
 
     sn = SiameseNetwork()
-    #sn.model.compile()
+
     sn.train(omg, 500)
