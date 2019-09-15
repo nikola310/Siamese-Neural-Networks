@@ -11,3 +11,6 @@ table_tr_no_tf_te_no_tf.csv
 table_tr_no_tf_te_tf.csv
 table_tr_tf_te_no_tf.csv
 table_tr_tf_te_tf.csv
+testing_alphabets/
+projector_data/
+trained_models/

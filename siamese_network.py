@@ -357,26 +357,3 @@ class SiameseNetwork:
         for l in zip(self.model.metrics_names, logs):
             result[l[0]] = l[1]
         return result
-
-
-
-if __name__ == '__main__':
-    print(tf.__version__)
-
-    gpus = tf.config.experimental.list_physical_devices('GPU')
-    if gpus:
-        # Restrict TensorFlow to only allocate 1GB of memory on the first GPU
-        try:
-            tf.config.experimental.set_virtual_device_configuration(
-                gpus[0], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=5120)])
-            logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
-        except RuntimeError as e:
-            # Virtual devices must be set before GPUs have been initialized
-            print(e)
-
-    omg = OmniglotLoader(use_transformations=False)
-
-    sn = SiameseNetwork()
-
-    sn.train(omg, 500)

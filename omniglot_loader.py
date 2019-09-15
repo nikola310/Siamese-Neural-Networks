@@ -11,7 +11,6 @@ class OmniglotLoader():
         A class which handles operations for loading and transforming images from Omniglot dataset. 
     '''
 
-
     def __init__(self, path='./Omniglot', rotation_range=[-10, 10], shear_range=[5.99, 6.57], scale_range=[0.9, 1.2], shift_range=[-2, 2], batch_size=20, use_transformations=True):
         '''
             Basic constructor which creates the class and sets up all the parameters necessary for running the training
@@ -32,8 +31,8 @@ class OmniglotLoader():
         self.batch_size = batch_size
 
         # Directories for training and evaluation dataset
-        self.background_dir = 'nn' #'images_background'
-        self.evaluation_dir = 'nn_test' #'images_evaluation' #'nn_test'
+        self.background_dir = 'images_background'
+        self.evaluation_dir = 'images_evaluation'
         self.use_transformations = use_transformations
 
         # Reading alphabets and creating dictinaries
@@ -55,6 +54,9 @@ class OmniglotLoader():
         self.__evaluation_alphabet_num = len(self.__evaluation_alphabet_list)
         self.__evaluation_done = False
 
+        self.__tp_batches_done = False
+        self.__tn_batches_done = False
+
     ####################################################################
     # Getters and setters                                              #
     ####################################################################
@@ -75,6 +77,10 @@ class OmniglotLoader():
             self.__symbols_list = list(self.training_alphabets[self.__training_alphabet_list[self.__current_alphabet_index]].keys())
         else:
             self.__symbols_list = list(self.evaluation_alphabets[self.__evaluation_alphabet_list[self.__current_alphabet_index]].keys())
+            print(self.__symbols_list)
+
+    def set_current_symbol_index(self, index):
+        self.__current_symbol_index = index
 
     def is_evaluation_done(self):
         return self.__evaluation_done
@@ -93,6 +99,27 @@ class OmniglotLoader():
 
     def set_use_transformations(self, use_transformations):
         self.use_transformations = use_transformations
+
+    def is_tp_batches_done(self):
+        return self.__tp_batches_done
+
+    def set_tp_batches_done(self, tp_batches_done):
+        self.__tp_batches_done = tp_batches_done
+
+    def is_tn_batches_done(self):
+        return self.__tn_batches_done
+
+    def set_tn_batches_done(self, tn_batches_done):
+        self.__tn_batches_done = tn_batches_done
+
+    def get_alphabet_index(self, alphabet, training):
+        if training:
+            return self.__training_alphabet_list.index(alphabet)
+        else:
+            return self.__evaluation_alphabet_list.index(alphabet)
+
+    def get_symbols(self, alphabet):
+        return self.evaluation_alphabets[alphabet].keys()
 
     ####################################################################
     # Various public functions                                         #
@@ -160,19 +187,6 @@ class OmniglotLoader():
             random_img = self.__get_random_image(current_alphabet, self.training_alphabets, self.background_dir)
             pairs += [[current_image, random_img]]
             labels += [1, 0]
-
-        # TODO: test with change symbol function
-        '''
-        self.__current_symbol_index += 1
-        if self.__current_symbol_index == len(self.training_alphabets[current_alphabet]):
-            self.__current_symbol_index = 0
-            self.__current_alphabet_index += 1
-            print(str(round((self.__current_alphabet_index / self.__training_alphabet_num) * 100.00, 2)) + ' %% of alphabets done')
-            if self.__current_alphabet_index == len(self.training_alphabets):
-                self.__current_alphabet_index = 0
-                self.__epoch_done = True
-            self.__symbols_list = list(self.training_alphabets[self.__training_alphabet_list[self.__current_alphabet_index]].keys())
-        '''
 
         self.__change_symbol(True)
 
@@ -361,6 +375,101 @@ class OmniglotLoader():
                 self.__evaluation_done = True
             self.__symbols_list = list(self.evaluation_alphabets[self.__evaluation_alphabet_list[self.__current_alphabet_index]].keys())
         
+        return np.array(pairs), np.array(labels)
+
+    def get_tp_batch(self, alphabet_name, training):
+        '''
+            Helper function to get true positive pairs from alphabet of interest in.
+            
+
+            Arguments:
+                - training = flag indicating should the training or evaluation dataset be used.
+
+            Returns:
+                - pairs = pairs of images
+                - labels = labels for pairs
+        '''
+        pairs = []
+        labels = []
+
+        random_pairs = [(random.randint(0, self.batch_size - 1), random.randint(0, self.batch_size - 1)) for k in range(self.batch_size)]
+        if training:
+            current_symbol = self.__symbols_list[self.__current_symbol_index]
+            directory = self.background_dir
+            img_names = self.training_alphabets[alphabet_name][current_symbol]
+        else:
+            current_symbol = self.__symbols_list[self.__current_symbol_index]
+            directory = self.evaluation_dir
+            img_names = self.evaluation_alphabets[alphabet_name][current_symbol]
+
+        for pair in random_pairs:
+            left_image = self.__get_image(os.path.join(self.path, directory, alphabet_name, current_symbol, img_names[pair[0]]))
+            right_image = self.__get_image(os.path.join(self.path, directory, alphabet_name, current_symbol, img_names[pair[1]]))
+
+            if self.use_transformations:
+                left_image = self.__transform_image(left_image)
+                right_image = self.__transform_image(right_image)
+            
+            pairs += [[left_image, right_image]]
+            labels += [1]
+
+        self.__current_symbol_index += 1
+        # print('Index: ' + str(self.__current_symbol_index))
+        if training:
+            if self.__current_symbol_index == len(self.training_alphabets[alphabet_name]):
+                self.__tp_batches_done = True
+        else:
+            if self.__current_symbol_index == len(self.evaluation_alphabets[alphabet_name]):
+                self.__tp_batches_done = True
+
+        return np.array(pairs), np.array(labels)
+
+    def get_tn_batch(self, alphabet_name, training):
+        '''
+            Gets a batch of negative pairs from dataset.
+
+            Arguments:
+                - training = flag indicating should the training or evaluation dataset be used.
+
+            Returns:
+                - pairs = pairs of images
+                - labels = labels for pairs
+        '''
+        pairs = []
+        labels = []
+
+        image_idx = random.randint(0, self.batch_size - 1)
+        if training:
+            current_symbol = self.__symbols_list[self.__current_symbol_index]
+            directory = self.background_dir
+            img_names = self.training_alphabets[alphabet_name][current_symbol]
+            alphabet_dict = self.training_alphabets
+        else:
+            current_symbol = self.__symbols_list[self.__current_symbol_index]
+            directory = self.evaluation_dir
+            img_names = self.evaluation_alphabets[alphabet_name][current_symbol]
+            alphabet_dict = self.evaluation_alphabets
+
+        for _ in range(0, self.batch_size - 1):
+            left_image = self.__get_image(os.path.join(self.path, directory, alphabet_name, current_symbol, img_names[image_idx]))
+            right_image = self.__get_random_image(alphabet_name, alphabet_dict, directory)
+
+            if self.use_transformations:
+                left_image = self.__transform_image(left_image)
+                right_image = self.__transform_image(right_image)
+            
+            pairs += [[left_image, right_image]]
+            labels += [0]
+
+        self.__current_symbol_index += 1
+        # print('Index: ' + str(self.__current_symbol_index))
+        if training:
+            if self.__current_symbol_index == len(self.training_alphabets[alphabet_name]):
+                self.__tn_batches_done = True
+        else:
+            if self.__current_symbol_index == len(self.evaluation_alphabets[alphabet_name]):
+                self.__tn_batches_done = True
+
         return np.array(pairs), np.array(labels)
 
     ####################################################################
