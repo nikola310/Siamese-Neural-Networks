@@ -28,7 +28,6 @@ class SiameseNetwork:
         self.l2_penalization = 1e-2
         if model_location is not None:
             self.model = load_model(model_location)
-            #self.model.compile(loss='binary_crossentropy', metrics=['binary_accuracy'], optimizer='sgd')
         else:
             self.model = self.__get_siamese_model()
         self.batch = batch
@@ -210,6 +209,29 @@ class SiameseNetwork:
         print('Testing finished.')
         print('Overall accuracy: ' + str(np.mean(accuracy)))
 
+    def get_predictions(self, omniglot):
+        '''
+            Performs testing of the network
+
+            Arguments:
+                - omniglot = instance of OmniglotLoader
+        '''
+        omniglot.set_current_alphabet_index(0)
+        omniglot.set_training_evaluation_symbols(False)
+        labels = []
+        predictions = []
+        print('Testing started.')
+        while True:
+            if omniglot.is_evaluation_done():
+                break
+
+            images, true_val = omniglot.get_test_batch()
+            pred = self.model.predict_on_batch([images[:, 0], images[:, 1]])
+            predictions.append(pred)
+            labels.append(true_val)
+        print('Testing ended.')
+        return predictions, labels
+
     ####################################################################
     # Methods for getting results for confusion matrix                 #
     ####################################################################
@@ -245,7 +267,7 @@ class SiameseNetwork:
             # Low true negatives are the ones for which prediction is below 0.25, while those that are 
             # equal or aobve 0.25 and below 0.5 are high true negatives.
             # Low false positives are the ones for which prediction above or equal 0.5 and below 0.75, 
-            # while those that are equal or aobve 0.75 are high false positives.
+            # while those that are equal or above 0.75 are high false positives.
             for i in range(len(predictions)):
                 if predictions[i] < 0.25:
                     true_negatives_low[omniglot.get_current_alphabet_index()] += 1

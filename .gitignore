@@ -14,3 +14,15 @@ table_tr_tf_te_tf.csv
 testing_alphabets/
 projector_data/
 trained_models/
+affine-test/
+tmp/
+tmp2/
+tables/
+MNIST project/__pycache__/
+MNIST project/.vscode/
+MNIST project/data/
+MNIST project/log-siamese/
+MNIST project/models/
+MNIST project/test_models/
+MNIST project/tables.pdf
+MNIST project/tables.odt

@@ -1,17 +1,19 @@
 import os
 import random
 import matplotlib.pyplot as plt
-from skimage.transform import AffineTransform, warp
 from skimage import util
 import numpy as np
 from PIL import Image
+import matplotlib.pyplot as plt
+from os.path import join
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 class OmniglotLoader():
     '''
         A class which handles operations for loading and transforming images from Omniglot dataset. 
     '''
 
-    def __init__(self, path='./Omniglot', rotation_range=[-10, 10], shear_range=[5.99, 6.57], scale_range=[0.9, 1.2], shift_range=[-2, 2], batch_size=20, use_transformations=True):
+    def __init__(self, path='./Omniglot', rotation_range=[-10, 10], shear_range=[-15, 15], scale_range=[0.8, 1.2], shift_range=[-2, 2], batch_size=20, use_transformations=True):
         '''
             Basic constructor which creates the class and sets up all the parameters necessary for running the training
             Params:
@@ -57,6 +59,8 @@ class OmniglotLoader():
         self.__tp_batches_done = False
         self.__tn_batches_done = False
 
+        self.img_transformer = ImageDataGenerator()
+
     ####################################################################
     # Getters and setters                                              #
     ####################################################################
@@ -77,7 +81,6 @@ class OmniglotLoader():
             self.__symbols_list = list(self.training_alphabets[self.__training_alphabet_list[self.__current_alphabet_index]].keys())
         else:
             self.__symbols_list = list(self.evaluation_alphabets[self.__evaluation_alphabet_list[self.__current_alphabet_index]].keys())
-            print(self.__symbols_list)
 
     def set_current_symbol_index(self, index):
         self.__current_symbol_index = index
@@ -179,14 +182,17 @@ class OmniglotLoader():
 
         for img in images[1:]:
             second_image = self.__get_image(os.path.join(self.path, directory, current_alphabet, current_symbol, self.training_alphabets[current_alphabet][current_symbol][img]))
-            
-            if self.use_transformations:
-                second_image = self.__transform_image(second_image)
             pairs += [[current_image, second_image]]
+
 
             random_img = self.__get_random_image(current_alphabet, self.training_alphabets, self.background_dir)
             pairs += [[current_image, random_img]]
             labels += [1, 0]
+
+            if self.use_transformations:
+                pairs += [[current_image, self.__transform_image(second_image)]]
+                pairs += [[current_image, self.__transform_image(random_img)]]
+                labels += [1, 0]
 
         self.__change_symbol(True)
 
@@ -232,8 +238,6 @@ class OmniglotLoader():
             else:
                 second_image = self.__get_image(os.path.join(self.path, self.background_dir, random_alphabet, random_symbol, self.training_alphabets[random_alphabet][random_symbol][img]))
             
-            if self.use_transformations:
-                second_image = self.__transform_image(second_image)
             pairs += [[current_image, second_image]]
 
             # Get one random image to create negative pair.
@@ -243,6 +247,11 @@ class OmniglotLoader():
                 random_img = self.__get_random_image(random_alphabet, self.training_alphabets, self.background_dir)
             pairs += [[current_image, random_img]]
             labels += [1, 0]
+
+            if self.use_transformations:
+                pairs += [[current_image, self.__transform_image(second_image)]]
+                pairs += [[current_image, self.__transform_image(random_img)]]
+                labels += [1, 0]
 
         return np.array(pairs), np.array(labels)
 
@@ -283,6 +292,10 @@ class OmniglotLoader():
             pairs += [[left_image, right_image]]
             labels += [1]
 
+            if self.use_transformations:
+                pairs += [[self.__transform_image(left_image), self.__transform_image(right_image)]]
+                labels += [1]
+
         self.__change_symbol(training)
 
         return np.array(pairs), np.array(labels)
@@ -319,12 +332,13 @@ class OmniglotLoader():
             left_image = self.__get_image(os.path.join(self.path, directory, current_alphabet, current_symbol, img_names[image_idx]))
             right_image = self.__get_random_image(current_alphabet, alphabet_dict, directory)
 
-            if self.use_transformations:
-                left_image = self.__transform_image(left_image)
-                right_image = self.__transform_image(right_image)
             
             pairs += [[left_image, right_image]]
             labels += [0]
+
+            if self.use_transformations:
+                pairs += [[self.__transform_image(left_image), self.__transform_image(right_image)]]
+                labels += [0]
 
         self.__change_symbol(training)
 
@@ -357,14 +371,21 @@ class OmniglotLoader():
         for img in images[1:]:
             second_image = self.__get_image(os.path.join(self.path, directory, current_alphabet, current_symbol, self.evaluation_alphabets[current_alphabet][current_symbol][img]))
             
-            if self.use_transformations:
-                second_image = self.__transform_image(second_image)
             pairs += [[current_image, second_image]]
 
             random_img = self.__get_random_image(current_alphabet, self.evaluation_alphabets, self.evaluation_dir)
             pairs += [[current_image, random_img]]
             labels += [1, 0]
 
+            if self.use_transformations:
+                pairs += [[current_image, self.__transform_image(second_image)]]
+                pairs += [[current_image, self.__transform_image(random_img)]]
+                labels += [1, 0]
+
+        self.__change_symbol(False)
+        if self.__epoch_done:
+            self.__evaluation_done = True
+        '''
         self.__current_symbol_index += 1
         if self.__current_symbol_index == len(self.evaluation_alphabets[current_alphabet]):
             self.__current_symbol_index = 0
@@ -374,7 +395,7 @@ class OmniglotLoader():
                 self.__current_alphabet_index = 0
                 self.__evaluation_done = True
             self.__symbols_list = list(self.evaluation_alphabets[self.__evaluation_alphabet_list[self.__current_alphabet_index]].keys())
-        
+        '''
         return np.array(pairs), np.array(labels)
 
     def get_tp_batch(self, alphabet_name, training):
@@ -406,12 +427,13 @@ class OmniglotLoader():
             left_image = self.__get_image(os.path.join(self.path, directory, alphabet_name, current_symbol, img_names[pair[0]]))
             right_image = self.__get_image(os.path.join(self.path, directory, alphabet_name, current_symbol, img_names[pair[1]]))
 
-            if self.use_transformations:
-                left_image = self.__transform_image(left_image)
-                right_image = self.__transform_image(right_image)
-            
             pairs += [[left_image, right_image]]
             labels += [1]
+
+            if self.use_transformations:
+                pairs += [[self.__transform_image(left_image), self.__transform_image(right_image)]]
+                labels += [1]
+
 
         self.__current_symbol_index += 1
         # print('Index: ' + str(self.__current_symbol_index))
@@ -453,13 +475,13 @@ class OmniglotLoader():
         for _ in range(0, self.batch_size - 1):
             left_image = self.__get_image(os.path.join(self.path, directory, alphabet_name, current_symbol, img_names[image_idx]))
             right_image = self.__get_random_image(alphabet_name, alphabet_dict, directory)
-
-            if self.use_transformations:
-                left_image = self.__transform_image(left_image)
-                right_image = self.__transform_image(right_image)
             
             pairs += [[left_image, right_image]]
             labels += [0]
+
+            if self.use_transformations:
+                pairs += [[self.__transform_image(left_image), self.__transform_image(right_image)]]
+                labels += [0]
 
         self.__current_symbol_index += 1
         # print('Index: ' + str(self.__current_symbol_index))
@@ -486,28 +508,30 @@ class OmniglotLoader():
             Returns:
                 - transformed = transformed image
         '''
-        theta = 0
-        dx, dy = 0, 0
-        sx, sy = 1, 1
-        shear_factor = 0
 
+        transformations = {}
         # Calculating transformation
         if np.random.uniform(low=0, high=1) < 0.5:
             theta = np.random.uniform(low=self.rotation_range[0], high=self.rotation_range[1])
+            transformations['theta'] = theta
         if np.random.uniform(low=0, high=1) < 0.5:
-            dx = np.random.uniform(low=self.shift_range[0], high=self.shift_range[1])
+            tx = np.random.uniform(low=self.shift_range[0], high=self.shift_range[1])
+            transformations['tx'] = tx
         if np.random.uniform(low=0, high=1) < 0.5:
-            dy = np.random.uniform(low=self.shift_range[0], high=self.shift_range[1])
+            ty = np.random.uniform(low=self.shift_range[0], high=self.shift_range[1])
+            transformations['ty'] = ty
         if np.random.uniform(low=0, high=1) < 0.5:
-            sx = np.random.uniform(low=self.scale_range[0], high=self.scale_range[1])
+            zx = np.random.uniform(low=self.scale_range[0], high=self.scale_range[1])
+            transformations['zx'] = zx
         if np.random.uniform(low=0, high=1) < 0.5:
-            sy = np.random.uniform(low=self.scale_range[0], high=self.scale_range[1])
+            zy = np.random.uniform(low=self.scale_range[0], high=self.scale_range[1])
+            transformations['zy'] = zy
         if np.random.uniform(low=0, high=1) < 0.5:
-            shear_factor = np.random.uniform(low=self.shear_range[0], high=self.shear_range[1])
+            shear = np.random.uniform(low=self.shear_range[0], high=self.shear_range[1])
+            transformations['shear'] = shear
 
-        transform_map = AffineTransform(scale=(sx, sy), rotation=np.deg2rad(theta), shear=shear_factor, translation=(dx, dy))
-        transformed = warp(img, inverse_map=transform_map, preserve_range=True)
-
+        transformed = self.img_transformer.apply_transform(img, transformations)
+        # plt.imsave(join('./tmp2', str(random.randint(0, 5000)) + '.png'), np.squeeze(transformed))
         return transformed
 
     def __get_image(self, path):
@@ -523,9 +547,7 @@ class OmniglotLoader():
         '''
         img = plt.imread(path)
         img = img.reshape(105, 105, 1)
-        # Invert image to be easier to use with affine transformations
-        inverted = util.invert(img)
-        return inverted
+        return img
 
     def __change_symbol(self, training):
         '''
@@ -577,8 +599,7 @@ class OmniglotLoader():
         random_idx = random.randint(0, 19)
 
         random_img = self.__get_image(os.path.join(self.path, directory, random_alphabet, random_symbol, alphabet_dict[random_alphabet][random_symbol][random_idx]))
-        if self.use_transformations:
-            random_img = self.__transform_image(random_img)
+
         return random_img
 
     def __create_alphabets(self):

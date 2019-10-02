@@ -3,6 +3,7 @@ import random
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 from tensorflow.keras.layers import Conv2D, MaxPool2D, Flatten, Dense, Input, Subtract, Lambda
+import tensorflow.keras.backend as K
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage import transform as tf
@@ -18,6 +19,7 @@ import csv
 from tensorflow.keras import Model, Sequential
 from omniglot_loader import OmniglotLoader
 from datetime import datetime
+from siamese_network import SiameseNetwork
 
 def copy_network(model):
     '''
@@ -146,7 +148,7 @@ def write_output_and_metadata(model, omniglot, training, model_type, test_type, 
 
 
 if __name__ == "__main__":
-
+    np.set_printoptions(threshold=sys.maxsize)
     four_labels = False
     num_classes = 20
     use_transformed_model = False
@@ -156,30 +158,26 @@ if __name__ == "__main__":
     run_start_time = datetime.today().strftime('%Y-%m-%d %H-%M-%S')
     projector_dir = 'projector_data' + '/' + run_start_time
     alphabet = 'Kannada'
-    model_type = ['model_tf', 'model']
-    test_type = ['test_tf', 'test']
 
-    model_w_tf = load_model('./trained_models/w_transform/model.h5')
-    model_wo_tf = load_model('./trained_models/wo_transform/model.h5')
-    net_copy = copy_network(model_wo_tf)
+    model = load_model('./trained_models/wo_transform/model.h5')
+    net_copy = copy_network(model)
 
     # Test model w/o transformations on alphabet w/o transformations
     log_dir = join(projector_dir, alphabet)
     if not exists(log_dir):
         makedirs(log_dir)
-    
-    # Test three cases:
-    # 1) Original Training and Test Data (No Transformations)
+    OutFunc = K.function([model.layers[2].get_layer('Conv_layer_1').input, [model.layers[0].input, model.layers[1].input]], [model.layers[2].get_layer('Dense_layer_1').output[1], model.layers[4].output])
     omg = OmniglotLoader(use_transformations=False)
-    omg.set_current_alphabet_index(omg.get_alphabet_index(alphabet, False))
-    omg.set_training_evaluation_symbols(False)
-    write_output_and_metadata(model_wo_tf, omg, False, 'model', 'test', log_dir)
-    # 2) Training (No Transformation), Testing (With Transformations)
-    omg.set_tn_batches_done(False)
-    omg.set_tp_batches_done(False)
-    omg.set_use_transformations(True)
-    write_output_and_metadata(model_wo_tf, omg, False, 'model', 'test_tf', log_dir)
-    # 3) Transformation in both Training and Testing
-    omg.set_tn_batches_done(False)
-    omg.set_tp_batches_done(False)
-    write_output_and_metadata(model_w_tf, omg, False, 'model_tf', 'test_tf', log_dir)
+    images, labels = omg.get_training_batch()
+    print(model.summary())
+    print(images[0, 0].dtype)
+    print(model.input)
+    K.clear_session()
+    out_val = OutFunc([[images[:, 0], images[:, 1]], [images[:, 0], images[:, 1]]])
+    print(out_val[1])
+    #print(out_val)
+    print(len(out_val[0][0])) # activations
+    print(out_val[1][0]) # predictions
+    print(len(out_val[0][1])) # activations
+    print(out_val[1][1]) # predictions
+    print(model.layers[2].get_layer('Dense_layer_1').output[0])
