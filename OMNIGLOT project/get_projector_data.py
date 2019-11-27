@@ -75,11 +75,9 @@ def write_output_and_metadata(model, omniglot, training, model_type, test_type, 
                 tsv_output = csv.writer(f_output, delimiter='\t')
                 tsv_output.writerow(activations[xid])
             '''
-            #print(activations[0])
+
             for ac in activations[:]:
-                #print(ac.shape)
                 out = np.array2string(ac.flatten(), threshold=np.inf, precision=7, max_line_width=np.inf, separator='\t').replace('[', '').replace(']', '')
-                #print(out)
                 f_output.write(out + '\n')
 
         metadata = []
@@ -121,13 +119,10 @@ def write_output_and_metadata(model, omniglot, training, model_type, test_type, 
             break
 
         pairs, _ = omniglot.get_tn_batch(alphabet, training)
-
-        # out_val = OutFunc([[pairs[:, 0], pairs[:, 1]], [pairs[:, 0], pairs[:, 1]]])
         
-        activations = network_copy.predict(pairs[:, 1]) # out_val[0][:] 
-        predictions = model.predict([pairs[:, 0], pairs[:, 1]]) # out_val[1][:] 
+        activations = network_copy.predict(pairs[:, 1])
+        predictions = model.predict([pairs[:, 0], pairs[:, 1]])
 
-        #output_name = 'output_' + model_type + '_' + test_type + '.tsv'
         with open(join(log_dir, output_name), 'a+') as f_output:
 
             for ac in activations[:]:
@@ -151,7 +146,6 @@ def write_output_and_metadata(model, omniglot, training, model_type, test_type, 
                 metadata.append('fp')
                 metadata_detailed.append('fp_high')
 
-        #output_name = 'metadata_' + model_type + '_' + test_type + '.tsv'
         with open(join(log_dir, meta_output), 'a+') as f_metadata:
             for i in range(len(metadata)):
                     f_metadata.write('{}\t{}\n'.format(metadata[i], metadata_detailed[i]))
@@ -168,8 +162,8 @@ if __name__ == "__main__":
     projector_dir = 'projector_data' + '/' + run_start_time
     alphabet = 'Kannada'
 
-    model_w_tf = load_model('./models/2019-09-26 11-04-37/model.h5') # load_model('./trained_models/w_transform/model.h5')
-    model_wo_tf = load_model('./models/2019-09-25 18-40-12/model.h5') # load_model('./trained_models/wo_transform/model.h5')
+    model_w_tf = load_model('./models/2019-09-26 11-04-37/model.h5')
+    model_wo_tf = load_model('./models/2019-09-25 18-40-12/model.h5')
     net_copy = copy_network(model_wo_tf)
 
     # Test model w/o transformations on alphabet w/o transformations

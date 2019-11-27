@@ -173,13 +173,6 @@ class OmniglotLoader():
         current_symbol = self.__symbols_list[self.__current_symbol_index]
         current_image = self.__get_image(os.path.join(self.path, directory, current_alphabet, current_symbol, self.training_alphabets[current_alphabet][current_symbol][0]))
         
-        '''
-        print('============================================================')
-        print('Current alphabet: ' + current_alphabet)
-        print('Current symbol: ' + current_symbol)
-        print('Current symbol: ' + str(self.__current_symbol_index))
-        '''
-
         for img in images[1:]:
             second_image = self.__get_image(os.path.join(self.path, directory, current_alphabet, current_symbol, self.training_alphabets[current_alphabet][current_symbol][img]))
             pairs += [[current_image, second_image]]
@@ -361,12 +354,6 @@ class OmniglotLoader():
         current_symbol = self.__symbols_list[self.__current_symbol_index]
         current_image = self.__get_image(os.path.join(self.path, directory, current_alphabet, current_symbol, self.evaluation_alphabets[current_alphabet][current_symbol][0]))
         
-        '''
-            print('============================================================')
-            print('Current alphabet: ' + current_alphabet)
-            print('Current symbol: ' + current_symbol)
-            print('Current symbol: ' + str(self.__current_symbol_index))
-        '''
         
         for img in images[1:]:
             second_image = self.__get_image(os.path.join(self.path, directory, current_alphabet, current_symbol, self.evaluation_alphabets[current_alphabet][current_symbol][img]))
@@ -385,17 +372,7 @@ class OmniglotLoader():
         self.__change_symbol(False)
         if self.__epoch_done:
             self.__evaluation_done = True
-        '''
-        self.__current_symbol_index += 1
-        if self.__current_symbol_index == len(self.evaluation_alphabets[current_alphabet]):
-            self.__current_symbol_index = 0
-            self.__current_alphabet_index += 1
-            print(str(round((self.__current_alphabet_index / self.__evaluation_alphabet_num) * 100.0, 2)) + ' % of alphabets done')
-            if self.__current_alphabet_index == len(self.evaluation_alphabets):
-                self.__current_alphabet_index = 0
-                self.__evaluation_done = True
-            self.__symbols_list = list(self.evaluation_alphabets[self.__evaluation_alphabet_list[self.__current_alphabet_index]].keys())
-        '''
+
         return np.array(pairs), np.array(labels)
 
     def get_tp_batch(self, alphabet_name, training):
@@ -436,7 +413,6 @@ class OmniglotLoader():
 
 
         self.__current_symbol_index += 1
-        # print('Index: ' + str(self.__current_symbol_index))
         if training:
             if self.__current_symbol_index == len(self.training_alphabets[alphabet_name]):
                 self.__tp_batches_done = True
@@ -484,7 +460,6 @@ class OmniglotLoader():
                 labels += [0]
 
         self.__current_symbol_index += 1
-        # print('Index: ' + str(self.__current_symbol_index))
         if training:
             if self.__current_symbol_index == len(self.training_alphabets[alphabet_name]):
                 self.__tn_batches_done = True
@@ -531,7 +506,6 @@ class OmniglotLoader():
             transformations['shear'] = shear
 
         transformed = self.img_transformer.apply_transform(img, transformations)
-        # plt.imsave(join('./tmp2', str(random.randint(0, 5000)) + '.png'), np.squeeze(transformed))
         return transformed
 
     def __get_image(self, path):

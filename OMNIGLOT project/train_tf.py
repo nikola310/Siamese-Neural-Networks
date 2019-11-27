@@ -6,7 +6,7 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.callbacks import TensorBoard
-from omniglot_loader2 import OmniglotLoader
+from omniglot_loader import OmniglotLoader
 import os
 from datetime import datetime
 from siamese_network import SiameseNetwork

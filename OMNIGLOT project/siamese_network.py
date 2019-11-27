@@ -119,23 +119,7 @@ class SiameseNetwork:
         if not os.path.exists(self.__test_dir):
             os.makedirs(self.__test_dir)
 
-        # Create two tensorboards, one to monitor training results, 
-        # other to monitor evaluation results
-        tensorboard = TensorBoard(
-            log_dir=self.__train_dir,
-            histogram_freq=0,
-            batch_size=20,
-            write_graph=True,
-            write_grads=True)
-        tensorboard.set_model(self.model)
-
-        tensorboard_eval = TensorBoard(
-            log_dir=self.__test_dir,
-            histogram_freq=0,
-            batch_size=20,
-            write_graph=True,
-            write_grads=True)
-        tensorboard_eval.set_model(self.model)
+        tensorboard, tensorboard_eval = self._get_tensorboards()
 
         print('Training started.')
         while True:
@@ -379,3 +363,32 @@ class SiameseNetwork:
         for l in zip(self.model.metrics_names, logs):
             result[l[0]] = l[1]
         return result
+
+    ####################################################################
+    # Various private functions                                         #
+    ####################################################################
+    def _get_tensorboards(self):
+        '''
+            Create two tensorboards, one to monitor training results, other to monitor evaluation results
+            
+            Returns:
+                tensorboards
+        '''
+
+        tensorboard = TensorBoard(
+            log_dir=self.__train_dir,
+            histogram_freq=0,
+            batch_size=20,
+            write_graph=True,
+            write_grads=True)
+        tensorboard.set_model(self.model)
+
+        evaluation_tensorboard = TensorBoard(
+            log_dir=self.__test_dir,
+            histogram_freq=0,
+            batch_size=20,
+            write_graph=True,
+            write_grads=True)
+        evaluation_tensorboard.set_model(self.model)
+
+        return tensorboard, evaluation_tensorboard
