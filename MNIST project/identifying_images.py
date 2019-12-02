@@ -8,7 +8,7 @@ import pickle
 from os.path import exists, join
 from os import makedirs
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-
+from train_models import transform_image
 shape = (28, 28)
 num_classes = 10
 rotation_range = [-10, 10]
@@ -18,7 +18,7 @@ shift_range = [-2, 2]
 
 use_model_with_transformations = False
 model_without_transformations = './test_models/siamese_model.h5'
-model_location = './test_models/siamese_model_transformations.h5'
+model_location = './test_models/'
 plot_location_tp_fn = './figures_tp_fn/'
 digits_location_tp_fn = './digits_tp_fn/'
 plot_location_tn_fp = './figures_tn_fp/'
@@ -33,47 +33,17 @@ def contrastive_loss(y_true, y_pred):
     margin_square = K.square(K.maximum(margin - y_pred, 0))
     return K.mean(y_true * sqaure_pred + (1 - y_true) * margin_square)
 
-def transform_image(image_1, image_2, img_transformer):
-
-    transformations = {}
-    # Calculating transformation
-    if np.random.uniform(low=0, high=1) < 0.5:
-        theta = np.random.uniform(low=rotation_range[0], high=rotation_range[1])
-        transformations['theta'] = theta
-    if np.random.uniform(low=0, high=1) < 0.5:
-        tx = np.random.uniform(low=shift_range[0], high=shift_range[1])
-        transformations['tx'] = tx
-    if np.random.uniform(low=0, high=1) < 0.5:
-        ty = np.random.uniform(low=shift_range[0], high=shift_range[1])
-        transformations['ty'] = ty
-    if np.random.uniform(low=0, high=1) < 0.5:
-        zx = np.random.uniform(low=scale_range[0], high=scale_range[1])
-        transformations['zx'] = zx
-    if np.random.uniform(low=0, high=1) < 0.5:
-        zy = np.random.uniform(low=scale_range[0], high=scale_range[1])
-        transformations['zy'] = zy
-    if np.random.uniform(low=0, high=1) < 0.5:
-        shear = np.random.uniform(low=shear_range[0], high=shear_range[1])
-        transformations['shear'] = shear
-    
-    image_1 = np.expand_dims(image_1, axis=-1)
-    image_2 = np.expand_dims(image_2, axis=-1)
-    image_1 = img_transformer.apply_transform(image_1, transformations)
-    image_2 = img_transformer.apply_transform(image_2, transformations) 
-    return image_1[:,:,0], image_2[:,:,0] 
-
 def create_positive_pairs(x, digit_indices, nums=[], test_with_transformations=False):
     pairs = []
     labels = []
     indices = []
-    transformer = ImageDataGenerator()
     n = min([len(digit_indices[d]) for d in range(num_classes)]) - 1
     for d in range(num_classes):
         indices.append(len(pairs))
         for i in range(0, n, 2):
             z1, z2 = digit_indices[d][i], digit_indices[d][i + 1]
             if test_with_transformations:
-                tr_p1, tr_p2 = transform_image(x[z1], x[z2], transformer)
+                tr_p1, tr_p2 = transform_image(x[z1], x[z2])
                 pairs += [[tr_p1, tr_p2]]
             else:
                 pairs += [[x[z1], x[z2]]]
@@ -99,7 +69,7 @@ def create_negative_pairs(x, digit_indices, nums=[], test_with_transformations=F
                     nums.append(dn)
                     z1, z2 = digit_indices[d][i], digit_indices[dn][i]
                     
-                    tr_p1, tr_p2 = transform_image(x[z1], x[z2], transformer)
+                    tr_p1, tr_p2 = transform_image(x[z1], x[z2])
                     pairs += [[tr_p1, tr_p2]]
             else:
                 inc = random.randrange(1, num_classes)
@@ -132,19 +102,19 @@ def compute_accuracy(y_true, y_pred):
     pred = y_pred.ravel() < 0.5
     return np.mean(pred == y_true)
 
-def print_pairs(digit_list, full_path, te_pairs):
-    for j in range(len(digit_list)):
+def print_pairs(digit_list, full_path, pairs):
+    j = 0
+    while j < len(digit_list) and j <= 9:
         if not exists(full_path):
             makedirs(full_path)
         plt.figure(j)
         plt.subplot(121)
-        plt.imshow(te_pairs[digit_list[j], 0], cmap='gray')
+        plt.imshow(pairs[digit_list[j], 0], cmap='gray')
         plt.subplot(122)
-        plt.imshow(te_pairs[digit_list[j], 1], cmap='gray')
+        plt.imshow(pairs[digit_list[j], 1], cmap='gray')
         plt.savefig(full_path + str(j) + '.png')
         plt.close(j)
-        if j == 10:
-            break
+        j += 1
 
 def test_tp_fn(model, plot_location_tp_fn, digits_location_tp_fn, transformations_enabled):
     (_, _), (x_test, y_test) = mnist.load_data()
@@ -164,49 +134,13 @@ def test_tp_fn(model, plot_location_tp_fn, digits_location_tp_fn, transformation
     if not exists(digits_location_tp_fn):
         makedirs(digits_location_tp_fn)
 
-    true_positives_low = [[], [], [], [], [], [], [], [], [], []]
-    true_positives_high = [[], [], [], [], [], [], [], [], [], []]
-    false_negatives_low = [[], [], [], [], [], [], [], [], [], []]
-    false_negatives_high = [[], [], [], [], [], [], [], [], [], []]
+    (true_positives_low, true_positives_high), (false_negatives_low, false_negatives_high) = sort_low_and_high_examples_into_arrays(y_pred, dig_idx)
 
-    for i in range(len(y_pred)):
-        if y_pred[i] < 0.25:
-            place_in_array(true_positives_low, dig_idx, i)
-        elif y_pred[i] >= 0.25 and y_pred[i] < 0.5:
-            place_in_array(true_positives_high, dig_idx, i)
-        elif y_pred[i] >= 0.5 and y_pred[i] < 0.75:
-            place_in_array(false_negatives_low, dig_idx, i)
-        elif y_pred[i] >= 0.75:
-            place_in_array(false_negatives_high, dig_idx, i)
+    save_images_of_digits_for_comparison(plot_location_tp_fn, te_pairs, ('True positive (low)', 'False negative (low)'), ('True positive (high)', 'False negative (high)'), 
+        true_positives_low, true_positives_high, false_negatives_low, false_negatives_high)
 
-    for i in range(10):
-        plt.figure(0, figsize=(8, 3))
-        plt.subplot(141)
-        plt.title('True positive (low)')
-        plt.axis('off')
-        plt.imshow(te_pairs[true_positives_low[i][0], 1], cmap='gray')
-        plt.subplot(142)
-        plt.title('True positive (high)')
-        plt.axis('off')
-        plt.imshow(te_pairs[true_positives_high[i][0], 1], cmap='gray')
-        plt.subplot(143)
-        plt.title('False negative (low)')
-        plt.axis('off')
-        if len(false_negatives_low[i]) > 0:
-            plt.imshow(te_pairs[false_negatives_low[i][0], 1], cmap='gray')
-        plt.subplot(144)
-        plt.title('False negative (high)')
-        plt.imshow(te_pairs[false_negatives_high[i][0], 1], cmap='gray')
-        plt.axis('off')
-        plt.tight_layout()
-        plt.savefig(plot_location_tp_fn + 'digit_' + str(i) + '.png')
-        plt.close(0)
-
-        print('Saving ' + str(i) + 's...')
-        print_pairs(true_positives_low[i], plot_location_tp_fn + '/' + str(i) + '/true_positives_low/', te_pairs)
-        print_pairs(true_positives_high[i], plot_location_tp_fn + '/' + str(i) + '/true_positives_high/', te_pairs)
-        print_pairs(false_negatives_low[i], plot_location_tp_fn + '/' + str(i) + '/false_negatives_low/', te_pairs)
-        print_pairs(false_negatives_high[i], plot_location_tp_fn + '/' + str(i) + '/false_negatives_high/', te_pairs)
+    save_individual_pairs(true_positives_low, true_positives_high, false_negatives_low, false_negatives_high, plot_location_tp_fn,
+        ('/true_positives_low/', '/true_positives_high/'), ('/false_negatives_low/', '/false_negatives_high/'), te_pairs)
 
     print('* Accuracy on test set: %0.2f%%' % (100 * te_acc))
 
@@ -239,53 +173,13 @@ def test_tn_fp(model, plot_location_tn_fp, digits_location_tn_fp, transformation
     y_negative_pred = model.predict([te_negative_pairs[:, 0], te_negative_pairs[:, 1]])
     te_acc = compute_accuracy(te_y, y_negative_pred)
 
-    true_negatives_low = [[], [], [], [], [], [], [], [], [], []]
-    true_negatives_high = [[], [], [], [], [], [], [], [], [], []]
-    false_positives_low = [[], [], [], [], [], [], [], [], [], []]
-    false_positives_high = [[], [], [], [], [], [], [], [], [], []]
+    (true_negatives_low, true_negatives_high), (false_positives_low, false_positives_high) = sort_low_and_high_examples_into_arrays(y_negative_pred, dig_idx)
 
-    for i in range(len(y_negative_pred)):
-        if y_negative_pred[i] < 0.25:
-            place_in_array(false_positives_low, dig_idx, i)
-        elif y_negative_pred[i] >= 0.25 and y_negative_pred[i] < 0.5:
-            place_in_array(false_positives_high, dig_idx, i)
-        elif y_negative_pred[i] >= 0.5 and y_negative_pred[i] < 0.75:
-            place_in_array(true_negatives_low, dig_idx, i)
-        elif y_negative_pred[i] >= 0.75:
-            place_in_array(true_negatives_high, dig_idx, i)
+    save_images_of_digits_for_comparison(plot_location_tn_fp, te_negative_pairs, ('False positive (low)', 'True negative (low)'), ('False positive (high)', 'True negative (high)'), 
+        false_positives_low, false_positives_high, true_negatives_low, true_negatives_high)
 
-    for i in range(10):
-        plt.figure(figsize=(8, 3))
-        plt.subplot(141)
-        plt.title('False positive (low)')
-        plt.axis('off')
-        if len(false_positives_low[i]) > 0:
-            plt.imshow(te_negative_pairs[false_positives_low[i][0], 1], cmap='gray')
-        plt.subplot(142)
-        plt.title('False positive (high)')
-        plt.axis('off')
-        if len(false_positives_high[i]) > 0:
-            plt.imshow(te_negative_pairs[false_positives_high[i][0], 1], cmap='gray')
-        plt.subplot(143)
-        plt.title('True negative (low)')
-        plt.axis('off')
-        if len(true_negatives_low[i]) > 0:
-            plt.imshow(te_negative_pairs[true_negatives_low[i][0], 1], cmap='gray')
-        plt.subplot(144)
-        plt.title('True negative (high)')
-        if len(true_negatives_high[i]) > 0:
-            plt.imshow(te_negative_pairs[true_negatives_high[i][0], 1], cmap='gray')
-        plt.axis('off')
-        plt.tight_layout()
-        plt.savefig(plot_location_tn_fp + 'digit_' + str(i) + '.png')
-    
-    print('Saving individual pairs...')
-    for i in range(10):
-        print('Saving ' + str(i) + 's...')
-        print_pairs(true_negatives_low[i], plot_location_tn_fp + '/' + str(i) + '/true_negatives_low/', te_negative_pairs)
-        print_pairs(true_negatives_high[i], plot_location_tn_fp + '/' + str(i) + '/true_negatives_high/', te_negative_pairs)
-        print_pairs(false_positives_low[i], plot_location_tn_fp + '/' + str(i) + '/false_positives_low/', te_negative_pairs)
-        print_pairs(false_positives_high[i], plot_location_tn_fp + '/' + str(i) + '/false_positives_high/', te_negative_pairs)
+    save_individual_pairs(true_negatives_low, true_negatives_high, false_positives_low, false_positives_high, plot_location_tn_fp,
+        ('/true_negatives_low/', '/true_negatives_high/'), ('/false_positives_low/', '/false_positives_high/'), te_negative_pairs)
 
     print('* Accuracy on test set: %0.2f%%' % (100 * te_acc))
     
@@ -302,17 +196,93 @@ def test_tn_fp(model, plot_location_tn_fp, digits_location_tn_fp, transformation
     with open(digits_location_tn_fp + 'false_positives_high.pkl', 'wb') as f:
         pickle.dump(false_positives_high, f)
 
+def save_images_of_digits_for_comparison(location, pairs, titles_low, titles_high, test_case_0_low, test_case_0_high, test_case_1_low, test_case_1_high):
+    """
+        Parameters:
+            - location - save location
+            - pairs - ndarray od pairs
+            - titles_low - titles for low examples (i.e. False positive (low))
+            - titles_high - titles for high examples (i.e. True negative (high))
+    """
+    for i in range(10): 
+        plt.figure(figsize=(8, 3))
+        plt.subplot(141)
+        plt.title(titles_low[0])
+        plt.axis('off')
+        if len(test_case_0_low[i]) > 0:
+            plt.imshow(pairs[test_case_0_low[i][0], 1], cmap='gray')
+        plt.subplot(142)
+        plt.title(titles_high[0])
+        plt.axis('off')
+        if len(test_case_0_high[i]) > 0:
+            plt.imshow(pairs[test_case_0_high[i][0], 1], cmap='gray')
+        plt.subplot(143)
+        plt.title(titles_low[1])
+        plt.axis('off')
+        if len(test_case_1_low[i]) > 0:
+            plt.imshow(pairs[test_case_1_low[i][0], 1], cmap='gray')
+        plt.subplot(144)
+        plt.title(titles_high[1])
+        if len(test_case_1_high[i]) > 0:
+            plt.imshow(pairs[test_case_1_high[i][0], 1], cmap='gray')
+        plt.axis('off')
+        plt.tight_layout()
+        plt.savefig(location + 'digit_' + str(i) + '.png')
+
+def save_individual_pairs(test_case_0_low, test_case_0_high, test_case_1_low, test_case_1_high, root_location, locations_test_case_0, locations_test_case_1, pairs):
+    print('Saving individual pairs...')
+    for i in range(10):
+        print('Saving ' + str(i) + 's...')
+        print_pairs(test_case_0_low[i], root_location +  '/' + str(i) + locations_test_case_0[0], pairs)
+        print_pairs(test_case_0_high[i], root_location + '/' + str(i) + locations_test_case_0[1], pairs)
+        print_pairs(test_case_1_low[i], root_location + '/' + str(i) + locations_test_case_1[0], pairs)
+        print_pairs(test_case_1_high[i], root_location + '/' + str(i) + locations_test_case_1[1], pairs)
+
+def sort_low_and_high_examples_into_arrays(predictions, dig_idx):
+    """
+        Sorts predictions into arrays, where both of them contain their low and high subclass.
+        More spesifically, each prediction is sorted into one of the four classes:
+            - below 0.25
+            - equal or above 0.25 and below 0.5
+            - equal or above 0.5 and below 0.75
+            - equal or above 0.75
+
+        Take note that when given true negatives and false positive prediction samples, it returns 
+        (true_negatives_low, true_negatives_high), (false_positives_low, false_positives_high),
+        but when given true positives and false negatives, return value is 
+        (true_positives_low, true_positives_high), (false_negatives_low, false_negatives_high)
+        Returns:
+            - tuples of arrays, organized into low and high subclasses
+    """
+
+    class_0_low = [[], [], [], [], [], [], [], [], [], []]
+    class_0_high = [[], [], [], [], [], [], [], [], [], []]
+    class_1_low = [[], [], [], [], [], [], [], [], [], []]
+    class_1_high = [[], [], [], [], [], [], [], [], [], []]
+
+    for i in range(len(predictions)):
+        if predictions[i] < 0.25:
+            place_in_array(class_0_low, dig_idx, i)
+        elif predictions[i] >= 0.25 and predictions[i] < 0.5:
+            place_in_array(class_0_high, dig_idx, i)
+        elif predictions[i] >= 0.5 and predictions[i] < 0.75:
+            place_in_array(class_1_low, dig_idx, i)
+        elif predictions[i] >= 0.75:
+            place_in_array(class_1_high, dig_idx, i)
+
+    return (class_0_low, class_0_high), (class_1_low, class_1_high)
+
 if __name__ == "__main__":
 
-
+    '''
     model = load_model(join(model_location, 'siamese_model_transformations.h5'), custom_objects={'contrastive_loss': contrastive_loss})
     test_tp_fn(model, './data/model_w_tf_te/' + plot_location_tp_fn, './data/model_w_tf_te/', False)
     test_tn_fp(model, './data/model_w_tf_te/' + plot_location_tn_fp, './data/model_w_tf_te/', False)
-
+    '''
     model = load_model(join(model_location, 'siamese_model_transformations.h5'), custom_objects={'contrastive_loss': contrastive_loss})
-    test_tp_fn(model, './data/model_w_tf_te_tf/' + plot_location_tp_fn, './data/model_w_tf_te_tf/', True)
+    #test_tp_fn(model, './data/model_w_tf_te_tf/' + plot_location_tp_fn, './data/model_w_tf_te_tf/', True)
     test_tn_fp(model, './data/model_w_tf_te_tf/' + plot_location_tn_fp, './data/model_w_tf_te_tf/', True)
-    
+    '''
     model = load_model(join(model_location, 'siamese_model.h5'), custom_objects={'contrastive_loss': contrastive_loss})
     test_tp_fn(model, './data/model_wo_tf_te/' + plot_location_tp_fn, './data/model_wo_tf_te/', False)
     test_tn_fp(model, './data/model_wo_tf_te/' + plot_location_tn_fp, './data/model_wo_tf_te/', False)
@@ -320,4 +290,4 @@ if __name__ == "__main__":
     model = load_model(join(model_location, 'siamese_model.h5'), custom_objects={'contrastive_loss': contrastive_loss})
     test_tp_fn(model, './data/model_wo_tf_te_tf/' + plot_location_tp_fn, './data/model_wo_tf_te_tf/', True)
     test_tn_fp(model, './data/model_wo_tf_te_tf/' + plot_location_tn_fp, './data/model_wo_tf_te_tf/', True)
-    
+    '''

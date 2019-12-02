@@ -17,14 +17,20 @@ from siamese_network import SiameseNetwork
 if __name__ == "__main__":
 
     gpus = tf.config.experimental.list_physical_devices('GPU')
+    
+    omg = OmniglotLoader(use_transformations=True)
 
+    sn = SiameseNetwork()
+
+    sn.train(omg, 200)
+    '''
     if gpus:
         try:
             tf.config.experimental.set_virtual_device_configuration(
-                gpus[1], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=6144)])
+                gpus[0], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=1024)])
             logical_gpus = tf.config.experimental.list_logical_devices('GPU')
             print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
-            with tf.device('GPU:1'):
+            with tf.device('GPU:0'):
                 omg = OmniglotLoader(use_transformations=True)
 
                 sn = SiameseNetwork()
@@ -34,3 +40,4 @@ if __name__ == "__main__":
             print(e)
     else:
         sn.train(omg, 2)
+    '''

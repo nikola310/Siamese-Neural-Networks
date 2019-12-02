@@ -41,7 +41,7 @@ def plot(directory, title):
     
     plt.figure(figsize=(20,10))
     plt.scatter(embedding[:, 0], embedding[:, 1], c=labels.Label_Detailed, cmap=matplotlib.colors.ListedColormap(colors_detailed))
-    #plt.gca().set_aspect('equal', 'datalim')
+
     patches = []
     for idx, col in enumerate(colors_detailed):
         patches.append(mpatches.Patch(color=col, label=classes_dict[uniques_detailed[idx]]))

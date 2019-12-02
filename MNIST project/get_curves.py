@@ -63,7 +63,7 @@ def create_pairs(x, digit_indices, nums=[], transform=False):
         Positive and negative pair creation.
         Alternates between positive and negative pairs.
     '''
-    pairs = [] #np.array([])
+    pairs = []
     labels = []
     gen = ImageDataGenerator()
     n = min([len(digit_indices[d]) for d in range(num_classes)]) - 1

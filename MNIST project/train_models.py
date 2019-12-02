@@ -20,12 +20,14 @@ epochs = 12
 batch_size = 128
 
 # input image dimensions
-img_rows, img_cols = 28, 28
+input_shape = (28, 28)
 
 rotation_range = [-12, 12]
 shear_range = [-12, 12]
 scale_range = [0.9, 1.4]
 shift_range = [-4, 4]
+
+image_transformer = ImageDataGenerator()
 
 # We can't initialize these variables to 0 - the network will get stuck.
 def weight_variable(shape):
@@ -70,7 +72,7 @@ def contrastive_loss(y_true, y_pred):
     margin_square = K.square(K.maximum(margin - y_pred, 0))
     return K.mean(y_true * sqaure_pred + (1 - y_true) * margin_square)
 
-def transform_image(image_1, image_2, img_transformer):
+def transform_image(image_1, image_2):
     transformations = {}
     # Calculating transformation
     if np.random.uniform(low=0, high=1) < 0.5:
@@ -94,8 +96,8 @@ def transform_image(image_1, image_2, img_transformer):
     
     image_1 = np.expand_dims(image_1, axis=-1)
     image_2 = np.expand_dims(image_2, axis=-1)
-    image_1 = img_transformer.apply_transform(image_1, transformations)
-    image_2 = img_transformer.apply_transform(image_2, transformations) 
+    image_1 = image_transformer.apply_transform(image_1, transformations)
+    image_2 = image_transformer.apply_transform(image_2, transformations) 
     return image_1[:,:,0], image_2[:,:,0] 
 
 def create_pairs(x, digit_indices, nums=[], transform=False):
@@ -103,35 +105,32 @@ def create_pairs(x, digit_indices, nums=[], transform=False):
         Positive and negative pair creation.
         Alternates between positive and negative pairs.
     '''
-    pairs = [] #np.array([])
+    pairs = []
     labels = []
-    gen = ImageDataGenerator()
     n = min([len(digit_indices[d]) for d in range(num_classes)]) - 1
     for d in range(num_classes):
         for i in range(n):
             z1, z2 = digit_indices[d][i], digit_indices[d][i + 1]
             pairs += [[x[z1], x[z2]]]
-            #pairs = np.append(pairs, np.asarray([x[z1], x[z2]]))
+
             if transform:
-                # performing transformation
                 # positive pairs transformation
-                tr_p1, tr_p2 = transform_image(x[z1], x[z2], gen)
+                tr_p1, tr_p2 = transform_image(x[z1], x[z2])
 
             inc = random.randrange(1, num_classes)
             dn = (d + inc) % num_classes
             nums.append(dn)
             z1, z2 = digit_indices[d][i], digit_indices[dn][i]
             pairs += [[x[z1], x[z2]]]
-            labels += [1, 0]
+            labels += [1.0, 0.0]
             
             if transform:
-                # performing transformation
                 # negative pairs transformation
-                tr_n1, tr_n2 = transform_image(x[z1], x[z2], gen)
+                tr_n1, tr_n2 = transform_image(x[z1], x[z2])
 
                 pairs += [[tr_p1, tr_p2]]
                 pairs += [[tr_n1, tr_n2]]
-                labels += [1, 0]
+                labels += [1.0, 0.0]
     if transform:
         return np.array(pairs, ndmin=3), np.array(labels)
     else:
@@ -164,8 +163,7 @@ def accuracy(y_true, y_pred):
     '''
     return K.mean(K.equal(y_true, K.cast(y_pred < 0.5, y_true.dtype)))
 
-def train_model(model_dir, transformations=False):
-    # The data, split between train and test sets
+def get_training_data():
     (x_train, y_train), (x_test, y_test) = mnist.load_data()
 
     x_train = x_train.astype('float32')
@@ -173,7 +171,11 @@ def train_model(model_dir, transformations=False):
     x_train /= 255
     x_test /= 255
 
-    input_shape = x_train.shape[1:]
+    return (x_train, y_train), (x_test, y_test)
+
+def prepare_data_for_training(transformations):
+
+    (x_train, y_train), (x_test, y_test) = get_training_data()
 
     # Create training+test positive and negative pairs
     digit_indices = [np.where(y_train == i)[0] for i in range(num_classes)]
@@ -181,6 +183,24 @@ def train_model(model_dir, transformations=False):
     tr_pairs, tr_y = create_pairs(x_train, digit_indices, transform=transformations)
     digit_indices = [np.where(y_test == i)[0] for i in range(num_classes)]
     te_pairs, te_y = create_pairs(x_test, digit_indices, labels, transform=transformations)
+
+    return (tr_pairs, tr_y), (te_pairs, te_y)
+
+def compute_final_accuracy(model, tr_pairs, tr_y, te_pairs, te_y):
+
+    y_pred = model.predict([tr_pairs[:, 0], tr_pairs[:, 1]])
+
+    tr_acc = compute_accuracy(tr_y, y_pred)
+    y_pred = model.predict([te_pairs[:, 0], te_pairs[:, 1]])
+    te_acc = compute_accuracy(te_y, y_pred)
+
+    print('* Accuracy on training set: %0.2f%%' % (100 * tr_acc))
+    print('* Accuracy on test set: %0.2f%%' % (100 * te_acc))
+
+
+def train_model(model_dir, transformations=False):
+    
+    (tr_pairs, tr_y), (te_pairs, te_y) = prepare_data_for_training(transformations)
 
     # Network definition
     base_network = create_base_network(input_shape)
@@ -199,7 +219,7 @@ def train_model(model_dir, transformations=False):
 
     model = Model([input_a, input_b], distance)
 
-    # train
+    # Train
     rms = RMSprop()
     model.compile(loss=contrastive_loss, optimizer=rms, metrics=[accuracy])
     model.fit([tr_pairs[:, 0], tr_pairs[:, 1]], tr_y,
@@ -207,15 +227,7 @@ def train_model(model_dir, transformations=False):
             epochs=epochs,
             validation_data=([te_pairs[:, 0], te_pairs[:, 1]], te_y))
 
-    # Compute final accuracy on training and test sets
-    y_pred = model.predict([tr_pairs[:, 0], tr_pairs[:, 1]])
-
-    tr_acc = compute_accuracy(tr_y, y_pred)
-    y_pred = model.predict([te_pairs[:, 0], te_pairs[:, 1]])
-    te_acc = compute_accuracy(te_y, y_pred)
-
-    print('* Accuracy on training set: %0.2f%%' % (100 * tr_acc))
-    print('* Accuracy on test set: %0.2f%%' % (100 * te_acc))
+    compute_final_accuracy(model, tr_pairs, tr_y, te_pairs, te_y)
 
     return model
 

@@ -75,7 +75,7 @@ def create_pairs(x, digit_indices, nums=[], transform=False):
         for i in range(n):
             z1, z2 = digit_indices[d][i], digit_indices[d][i + 1]
             pairs += [[x[z1], x[z2]]]
-            #pairs = np.append(pairs, np.asarray([x[z1], x[z2]]))
+
             if transform:
                 # performing transformation
                 # positive pairs transformation
@@ -86,23 +86,16 @@ def create_pairs(x, digit_indices, nums=[], transform=False):
             nums.append(dn)
             z1, z2 = digit_indices[d][i], digit_indices[dn][i]
             pairs += [[x[z1], x[z2]]]
-            #pairs = np.append(pairs, [x[z1], x[z2]])
             labels += [1, 0]
             
             if transform:
                 # performing transformation
                 # negative pairs transformation
                 tr_n1, tr_n2 = transform_image(x[z1], x[z2], gen)
-                #pairs = np.append(pairs, [tr_p1, tr_p2])
-                #pairs = np.append(pairs, [tr_n1, tr_n2])
                 pairs += [[tr_p1, tr_p2]]
                 pairs += [[tr_n1, tr_n2]]
                 labels += [1, 0]
     if transform:
-        print('if')
-        #retval = np.array([])
-        #for i in pairs:
-        #    retval = np.append(retval, i)
         return np.array(pairs, ndmin=3), np.array(labels)
     else:
         return np.array(pairs), np.array(labels)
@@ -364,9 +357,6 @@ if __name__ == "__main__":
     transformations=True
     te_pairs, te_y = create_pairs(x_test, digit_indices, labels, transform=False)
     y_pred = model.predict([te_pairs[:, 0], te_pairs[:, 1]])
-    print(y_pred.shape)
-    #te_y = np.expand_dims(te_y, axis=-1)
-    #y_pred = np.expand_dims(y_pred, axis=-1)
     fpr, tpr, thresholds = skplt.metrics.roc_curve(te_y, y_pred, pos_label=0)
     plt.plot(fpr,tpr)
     plt.show()
