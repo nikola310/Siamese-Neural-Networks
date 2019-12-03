@@ -9,8 +9,7 @@ import matplotlib.pyplot as plt
 from os.path import exists, join
 from os import makedirs
 import matplotlib.patches as mpatches
-from keras.preprocessing.image import ImageDataGenerator
-import keras.backend as K
+from train_models import contrastive_loss, create_pairs
 
 shape = (28, 28)
 num_classes = 10
@@ -19,81 +18,7 @@ shear_range = [-12, 12]
 scale_range = [0.9, 1.2]
 shift_range = [-2, 2]
 model_wo_tf = './test_models/siamese_model.h5'
-model_w_tf = './models/2019-09-28 21-26-51/siamese_model_transformations.h5'
-
-def contrastive_loss(y_true, y_pred):
-    '''Contrastive loss from Hadsell-et-al.'06
-    http://yann.lecun.com/exdb/publis/pdf/hadsell-chopra-lecun-06.pdf
-    '''
-    margin = 1
-    sqaure_pred = K.square(y_pred)
-    margin_square = K.square(K.maximum(margin - y_pred, 0))
-    return K.mean(y_true * sqaure_pred + (1 - y_true) * margin_square)
-
-def transform_image(image_1, image_2, img_transformer):
-    transformations = {}
-    # Calculating transformation
-    if np.random.uniform(low=0, high=1) < 0.5:
-        theta = np.random.uniform(low=rotation_range[0], high=rotation_range[1])
-        transformations['theta'] = theta
-    if np.random.uniform(low=0, high=1) < 0.5:
-        tx = np.random.uniform(low=shift_range[0], high=shift_range[1])
-        transformations['tx'] = tx
-    if np.random.uniform(low=0, high=1) < 0.5:
-        ty = np.random.uniform(low=shift_range[0], high=shift_range[1])
-        transformations['ty'] = ty
-    if np.random.uniform(low=0, high=1) < 0.5:
-        zx = np.random.uniform(low=scale_range[0], high=scale_range[1])
-        transformations['zx'] = zx
-    if np.random.uniform(low=0, high=1) < 0.5:
-        zy = np.random.uniform(low=scale_range[0], high=scale_range[1])
-        transformations['zy'] = zy
-    if np.random.uniform(low=0, high=1) < 0.5:
-        shear = np.random.uniform(low=shear_range[0], high=shear_range[1])
-        transformations['shear'] = shear
-    
-    image_1 = np.expand_dims(image_1, axis=-1)
-    image_2 = np.expand_dims(image_2, axis=-1)
-    image_1 = img_transformer.apply_transform(image_1, transformations)
-    image_2 = img_transformer.apply_transform(image_2, transformations) 
-    return image_1[:,:,0], image_2[:,:,0] 
-
-def create_pairs(x, digit_indices, nums=[], transform=False):
-    '''
-        Positive and negative pair creation.
-        Alternates between positive and negative pairs.
-    '''
-    pairs = []
-    labels = []
-    gen = ImageDataGenerator()
-    n = min([len(digit_indices[d]) for d in range(num_classes)]) - 1
-    for d in range(num_classes):
-        for i in range(n):
-            z1, z2 = digit_indices[d][i], digit_indices[d][i + 1]
-            pairs += [[x[z1], x[z2]]]
-            if transform:
-                # performing transformation
-                # positive pairs transformation
-                tr_p1, tr_p2 = transform_image(x[z1], x[z2], gen)
-
-            inc = random.randrange(1, num_classes)
-            dn = (d + inc) % num_classes
-            nums.append(dn)
-            z1, z2 = digit_indices[d][i], digit_indices[dn][i]
-            pairs += [[x[z1], x[z2]]]
-            labels += [1, 0]
-            
-            if transform:
-                # performing transformation
-                # negative pairs transformation
-                tr_n1, tr_n2 = transform_image(x[z1], x[z2], gen)
-                pairs += [[tr_p1, tr_p2]]
-                pairs += [[tr_n1, tr_n2]]
-                labels += [1, 0]
-    if transform:
-        return np.array(pairs, ndmin=3), np.array(labels)
-    else:
-        return np.array(pairs), np.array(labels)
+model_w_tf = './test_models/siamese_model_transformations.h5'
 
 if __name__ == '__main__':
     # The data, split between train and test sets

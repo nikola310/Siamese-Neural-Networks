@@ -8,8 +8,8 @@ import pickle
 from os.path import exists, join
 from os import makedirs
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from train_models import transform_image
-shape = (28, 28)
+from train_models import transform_image, contrastive_loss, compute_accuracy
+
 num_classes = 10
 rotation_range = [-10, 10]
 shear_range = [-12, 12]
@@ -23,15 +23,6 @@ plot_location_tp_fn = './figures_tp_fn/'
 digits_location_tp_fn = './digits_tp_fn/'
 plot_location_tn_fp = './figures_tn_fp/'
 digits_location_tn_fp = './digits_tn_fp/'
-
-def contrastive_loss(y_true, y_pred):
-    '''Contrastive loss from Hadsell-et-al.'06
-    http://yann.lecun.com/exdb/publis/pdf/hadsell-chopra-lecun-06.pdf
-    '''
-    margin = 1
-    sqaure_pred = K.square(y_pred)
-    margin_square = K.square(K.maximum(margin - y_pred, 0))
-    return K.mean(y_true * sqaure_pred + (1 - y_true) * margin_square)
 
 def create_positive_pairs(x, digit_indices, nums=[], test_with_transformations=False):
     pairs = []
@@ -95,12 +86,6 @@ def place_in_array(array, dig_idx, index):
         elif dig_idx[j] <= index and dig_idx[j+1] > index:
             array[j].append(index)
             break
-    
-def compute_accuracy(y_true, y_pred):
-    '''Compute classification accuracy with a fixed threshold on distances.
-    '''
-    pred = y_pred.ravel() < 0.5
-    return np.mean(pred == y_true)
 
 def print_pairs(digit_list, full_path, pairs):
     j = 0
@@ -247,10 +232,14 @@ def sort_low_and_high_examples_into_arrays(predictions, dig_idx):
             - equal or above 0.5 and below 0.75
             - equal or above 0.75
 
-        Take note that when given true negatives and false positive prediction samples, it returns 
+        Take note that when given true negatives and false positive prediction samples, it returns:
         (true_negatives_low, true_negatives_high), (false_positives_low, false_positives_high),
-        but when given true positives and false negatives, return value is 
+        but when given true positives and false negatives, return value is:
         (true_positives_low, true_positives_high), (false_negatives_low, false_negatives_high)
+
+        Parameters:
+            - predictions: array of predictions
+            - dig_idx: digit indices
         Returns:
             - tuples of arrays, organized into low and high subclasses
     """

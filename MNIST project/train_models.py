@@ -157,12 +157,6 @@ def compute_accuracy(y_true, y_pred):
     pred = y_pred.ravel() < 0.5
     return np.mean(pred == y_true)
 
-
-def accuracy(y_true, y_pred):
-    '''Compute classification accuracy with a fixed threshold on distances.
-    '''
-    return K.mean(K.equal(y_true, K.cast(y_pred < 0.5, y_true.dtype)))
-
 def get_training_data():
     (x_train, y_train), (x_test, y_test) = mnist.load_data()
 
