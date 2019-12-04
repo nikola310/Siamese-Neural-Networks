@@ -16,7 +16,8 @@ num_classes = 10
 use_transformed_model = False
 testing_with_transformations = True
 input_shape = (28, 28)
-test_cases = [('./data/model_w_tf_te', './test_models/siamese_model_transformations.h5'), ('./data/model_w_tf_te_tf', './test_models/siamese_model_transformations.h5')]
+test_cases = [('./data/model_w_tf_te', './test_models/siamese_model_transformations.h5'), ('./data/model_w_tf_te_tf', './test_models/siamese_model_transformations.h5'),
+                ('./data/model_wo_tf_te', './test_models/siamese_model.h5'), ('./data/model_wo_tf_te_tf', './test_models/siamese_model.h5')]
 
 def create_subset(pairs, indices):
     ret = []

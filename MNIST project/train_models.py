@@ -73,6 +73,7 @@ def contrastive_loss(y_true, y_pred):
     return K.mean(y_true * sqaure_pred + (1 - y_true) * margin_square)
 
 def transform_image(image_1, image_2):
+    
     transformations = {}
     # Calculating transformation
     if np.random.uniform(low=0, high=1) < 0.5:
@@ -93,7 +94,7 @@ def transform_image(image_1, image_2):
     if np.random.uniform(low=0, high=1) < 0.5:
         shear = np.random.uniform(low=shear_range[0], high=shear_range[1])
         transformations['shear'] = shear
-    
+        
     image_1 = np.expand_dims(image_1, axis=-1)
     image_2 = np.expand_dims(image_2, axis=-1)
     image_1 = image_transformer.apply_transform(image_1, transformations)
@@ -150,6 +151,28 @@ def create_base_network(input_shape):
 
     return Model(input, x)
 
+def creatе_model():
+    # Network definition
+    base_network = create_base_network(input_shape)
+
+    input_a = Input(shape=input_shape)
+    input_b = Input(shape=input_shape)
+
+    # because we re-use the same instance `base_network`,
+    # the weights of the network
+    # will be shared across the two branches
+    processed_a = base_network(input_a)
+    processed_b = base_network(input_b)
+
+    distance = Lambda(euclidean_distance,
+                    output_shape=eucl_dist_output_shape, name='lambda')([processed_a, processed_b])
+
+    model = Model([input_a, input_b], distance)
+    rms = RMSprop()
+    model.compile(loss=contrastive_loss, optimizer=rms, metrics=['accuracy'])
+
+    return model
+
 
 def compute_accuracy(y_true, y_pred):
     '''Compute classification accuracy with a fixed threshold on distances.
@@ -157,19 +180,18 @@ def compute_accuracy(y_true, y_pred):
     pred = y_pred.ravel() < 0.5
     return np.mean(pred == y_true)
 
-def get_training_data():
+def get_data():
     (x_train, y_train), (x_test, y_test) = mnist.load_data()
 
     x_train = x_train.astype('float32')
     x_test = x_test.astype('float32')
     x_train /= 255
     x_test /= 255
-
     return (x_train, y_train), (x_test, y_test)
 
-def prepare_data_for_training(transformations):
+def prepare_data_for_work(transformations):
 
-    (x_train, y_train), (x_test, y_test) = get_training_data()
+    (x_train, y_train), (x_test, y_test) = get_data()
 
     # Create training+test positive and negative pairs
     digit_indices = [np.where(y_train == i)[0] for i in range(num_classes)]
@@ -194,32 +216,12 @@ def compute_final_accuracy(model, tr_pairs, tr_y, te_pairs, te_y):
 
 def train_model(model_dir, transformations=False):
     
-    (tr_pairs, tr_y), (te_pairs, te_y) = prepare_data_for_training(transformations)
+    (tr_pairs, tr_y), (te_pairs, te_y) = prepare_data_for_work(transformations)
 
-    # Network definition
-    base_network = create_base_network(input_shape)
+    model = creatе_model()
 
-    input_a = Input(shape=input_shape)
-    input_b = Input(shape=input_shape)
-
-    # because we re-use the same instance `base_network`,
-    # the weights of the network
-    # will be shared across the two branches
-    processed_a = base_network(input_a)
-    processed_b = base_network(input_b)
-
-    distance = Lambda(euclidean_distance,
-                    output_shape=eucl_dist_output_shape, name='lambda')([processed_a, processed_b])
-
-    model = Model([input_a, input_b], distance)
-
-    # Train
-    rms = RMSprop()
-    model.compile(loss=contrastive_loss, optimizer=rms, metrics=[accuracy])
-    model.fit([tr_pairs[:, 0], tr_pairs[:, 1]], tr_y,
-            batch_size=batch_size,
-            epochs=epochs,
-            validation_data=([te_pairs[:, 0], te_pairs[:, 1]], te_y))
+    model.fit([tr_pairs[:, 0], tr_pairs[:, 1]], tr_y, batch_size=batch_size,
+            epochs=epochs, validation_data=([te_pairs[:, 0], te_pairs[:, 1]], te_y))
 
     compute_final_accuracy(model, tr_pairs, tr_y, te_pairs, te_y)
 
@@ -233,9 +235,10 @@ if __name__ == "__main__":
     if not exists(model_dir):
         makedirs(model_dir)
     
+    # Training model without transformations
     model = train_model(model_dir)
     model.save(join(model_dir, 'siamese_model.h5'))
     
-    # Training model with transformation
+    # Training model with transformations
     model = train_model(model_dir, True)
     model.save(join(model_dir, 'siamese_model_transformations.h5'))

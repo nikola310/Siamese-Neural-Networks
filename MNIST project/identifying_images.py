@@ -7,7 +7,6 @@ import tensorflow.keras.backend as K
 import pickle
 from os.path import exists, join
 from os import makedirs
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from train_models import transform_image, contrastive_loss, compute_accuracy
 
 num_classes = 10
@@ -16,8 +15,6 @@ shear_range = [-12, 12]
 scale_range = [0.9, 1.2]
 shift_range = [-2, 2]
 
-use_model_with_transformations = False
-model_without_transformations = './test_models/siamese_model.h5'
 model_location = './test_models/'
 plot_location_tp_fn = './figures_tp_fn/'
 digits_location_tp_fn = './digits_tp_fn/'
@@ -45,7 +42,6 @@ def create_negative_pairs(x, digit_indices, nums=[], test_with_transformations=F
     pairs = []
     labels = []
     indices = []
-    transformer = ImageDataGenerator()
     n = min([len(digit_indices[d]) for d in range(num_classes)]) - 1
     for d in range(10):
         indices.append(len(pairs))
@@ -79,6 +75,10 @@ def create_negative_pairs(x, digit_indices, nums=[], test_with_transformations=F
     return np.array(pairs), np.array(labels), np.array(indices)
 
 def place_in_array(array, dig_idx, index):
+    print(dig_idx)
+    print(type(dig_idx))
+    print(dig_idx.shape)
+    print(bruh_moment)
     for j in range(len(dig_idx)):
         if j == 9:
             array[9].append(index)
@@ -89,7 +89,7 @@ def place_in_array(array, dig_idx, index):
 
 def print_pairs(digit_list, full_path, pairs):
     j = 0
-    while j < len(digit_list) and j <= 9:
+    while j < len(digit_list) and j <= 5:
         if not exists(full_path):
             makedirs(full_path)
         plt.figure(j)
@@ -263,15 +263,15 @@ def sort_low_and_high_examples_into_arrays(predictions, dig_idx):
 
 if __name__ == "__main__":
 
-    '''
+    
     model = load_model(join(model_location, 'siamese_model_transformations.h5'), custom_objects={'contrastive_loss': contrastive_loss})
     test_tp_fn(model, './data/model_w_tf_te/' + plot_location_tp_fn, './data/model_w_tf_te/', False)
     test_tn_fp(model, './data/model_w_tf_te/' + plot_location_tn_fp, './data/model_w_tf_te/', False)
-    '''
+    
     model = load_model(join(model_location, 'siamese_model_transformations.h5'), custom_objects={'contrastive_loss': contrastive_loss})
-    #test_tp_fn(model, './data/model_w_tf_te_tf/' + plot_location_tp_fn, './data/model_w_tf_te_tf/', True)
+    test_tp_fn(model, './data/model_w_tf_te_tf/' + plot_location_tp_fn, './data/model_w_tf_te_tf/', True)
     test_tn_fp(model, './data/model_w_tf_te_tf/' + plot_location_tn_fp, './data/model_w_tf_te_tf/', True)
-    '''
+    
     model = load_model(join(model_location, 'siamese_model.h5'), custom_objects={'contrastive_loss': contrastive_loss})
     test_tp_fn(model, './data/model_wo_tf_te/' + plot_location_tp_fn, './data/model_wo_tf_te/', False)
     test_tn_fp(model, './data/model_wo_tf_te/' + plot_location_tn_fp, './data/model_wo_tf_te/', False)
@@ -279,4 +279,4 @@ if __name__ == "__main__":
     model = load_model(join(model_location, 'siamese_model.h5'), custom_objects={'contrastive_loss': contrastive_loss})
     test_tp_fn(model, './data/model_wo_tf_te_tf/' + plot_location_tp_fn, './data/model_wo_tf_te_tf/', True)
     test_tn_fp(model, './data/model_wo_tf_te_tf/' + plot_location_tn_fp, './data/model_wo_tf_te_tf/', True)
-    '''
+    
