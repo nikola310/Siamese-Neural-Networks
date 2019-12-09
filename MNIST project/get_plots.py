@@ -5,7 +5,7 @@ from os.path import join
 import matplotlib.pyplot as plt
 import matplotlib
 import matplotlib.patches as mpatches
-from train_models import prepare_data_for_work, create_pairs, contrastive_loss
+from train_models import prepare_data_for_work, contrastive_loss
 from tensorflow.keras.models import load_model
 import numpy as np
 
@@ -115,7 +115,7 @@ def get_roc_and_auc_curves():
 
 
 if __name__ == '__main__':
-    get_roc_and_auc_curves()
+    #get_roc_and_auc_curves()
 
     plot('./data/model_w_tf_te', 'Training with transformations, testing without transformations')
     plot('./data/model_w_tf_te_tf', 'Training with transformations, testing with transformations')

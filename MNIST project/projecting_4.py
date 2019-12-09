@@ -1,47 +1,22 @@
-import sys
-import random
-from tensorflow.keras.models import load_model, Model
+from tensorflow.keras import backend as K
+from tensorflow.keras.models import load_model
+from train_models import contrastive_loss
 import numpy as np
-import tensorflow.keras.backend as K
 from os.path import join
 import pickle
 import csv
-from tensorflow.keras.layers import Input, Flatten, Dense, Dropout
-from train_models import contrastive_loss, create_pairs
+from projecting_4 import create_subset
 
-np.set_printoptions(threshold=sys.maxsize)
-
-four_labels = False
-num_classes = 10
-use_transformed_model = False
-testing_with_transformations = True
-input_shape = (28, 28)
 test_cases = [('./data/model_w_tf_te', './test_models/siamese_model_transformations.h5'), ('./data/model_w_tf_te_tf', './test_models/siamese_model_transformations.h5'),
-                ('./data/model_wo_tf_te', './test_models/siamese_model.h5'), ('./data/model_wo_tf_te_tf', './test_models/siamese_model.h5')]
+                ('./data/model_wo_tf_te', './test_models/siamese_model.h5'), ('./data/model_wo_tf_te_tf', './test_models/siamese_model.h5')]  
 
-def create_subset(pairs, indices):
-    ret = []
-    
-    subset = []
-    subset = [indices[3][j] for j in range(len(indices[3]))]
-    ret += pairs[subset].tolist()
-    return np.asarray(ret)
-
-def write_output_and_labels(digits_location, model_loc):
-
-    model = load_model(model_loc, custom_objects={'contrastive_loss': contrastive_loss})
-    # Create copy of snn
-    input2 = Input(shape=input_shape)
-    x = Flatten()(input2)
-    x = Dense(128, activation='relu', weights=model.layers[2].layers[2].get_weights())(x)
-    x = Dropout(0.1)(x)
-    x = Dense(128, activation='relu', weights=model.layers[2].layers[4].get_weights())(x)
-    x = Dropout(0.1)(x)
-    x = Dense(128, activation='relu', weights=model.layers[2].layers[6].get_weights(), name="features")(x)
-    model2 = Model(input2, x)
-    
+def load_pairs(digits_location):
     pairs_tn_fp = np.load(join(digits_location, 'pairs_tn_fp.npy'))
-
+    pairs_tp_fn = np.load(join(digits_location, 'pairs_tp_fn.npy'))
+    
+    return pairs_tn_fp,  pairs_tp_fn
+    
+def load_test_data(digits_location):
     with open(join(digits_location, 'true_negatives_low.pkl'), 'rb') as f:
         true_negatives_low = pickle.load(f)
 
@@ -53,8 +28,6 @@ def write_output_and_labels(digits_location, model_loc):
 
     with open(join(digits_location, 'false_positives_high.pkl'), 'rb') as f:
         false_positives_high = pickle.load(f)
-
-    pairs_tp_fn = np.load(join(digits_location, 'pairs_tp_fn.npy'))
 
     with open(join(digits_location, 'true_positives_low.pkl'), 'rb') as f:
         true_positives_low = pickle.load(f)
@@ -68,71 +41,44 @@ def write_output_and_labels(digits_location, model_loc):
     with open(join(digits_location, 'false_negatives_high.pkl'), 'rb') as f:
         false_negatives_high = pickle.load(f)
 
-    te_pairs_tp_low = create_subset(pairs_tp_fn, true_positives_low)
-    te_pairs_tp_high = create_subset(pairs_tp_fn, true_positives_high)
-    te_pairs_fn_low = create_subset(pairs_tp_fn, false_negatives_low)
-    te_pairs_fn_high = create_subset(pairs_tp_fn, false_negatives_high)
+    return (true_negatives_low,  true_negatives_high),  (false_positives_low,  false_positives_high),  (true_positives_low,  true_positives_high),  (false_negatives_low,  false_negatives_high)
 
-    te_pairs_tn_low = create_subset(pairs_tn_fp, true_negatives_low)
-    te_pairs_tn_high = create_subset(pairs_tn_fp, true_negatives_high)
-    te_pairs_fp_low = create_subset(pairs_tn_fp, false_positives_low)
-    te_pairs_fp_high = create_subset(pairs_tn_fp, false_positives_high)
-
-    activations_right_tp_low = model2.predict(te_pairs_tp_low[:, 1])
-
-    activations_right_tp_high = model2.predict(te_pairs_tp_high[:, 1])
-
-    activations_right_fn_low = model2.predict(te_pairs_fn_low[:, 1])
-
-    activations_right_fn_high = model2.predict(te_pairs_fn_high[:, 1])
-
-
-    activations_right_tn_low = model2.predict(te_pairs_tn_low[:, 1])
-
-    activations_right_tn_high = model2.predict(te_pairs_tn_high[:, 1])
-
-    activations_right_fp_low = model2.predict(te_pairs_fp_low[:, 1])
-
-    activations_right_fp_high = model2.predict(te_pairs_fp_high[:, 1])
-
+def get_activations(functor,  pairs):
+    activations = []
+    lengths = []
+    for pair in pairs:
+        acts = functor([pair[:,  0],  pair[:,  1]])        
+        lengths.append(len(acts[1]))
+        activations.extend(acts[1])
+    return activations, lengths
+    
+def write_activations_to_file(digits_location,  activations):
     with open(join(digits_location, 'output.tsv'), 'w', newline='') as f_output:
         
-        for xid in range(activations_right_tp_low.shape[0]):
+        for activation in activations:
             tsv_output = csv.writer(f_output, delimiter='\t')
-            tsv_output.writerow(activations_right_tp_low[xid])
+            tsv_output.writerow(activation)
+            
+def get_labels(lengths):
+    """"
+        Calculates labels from activations and stores them in a file. It is necessary to store them in next order:
+            true positives, false negatives, true negatives, false positives
+    """
+    classes = ["tp",  "fn",  "tn",  "fp"]
+    classes_detailed = ["tp_low",  "tp_high",  "fn_low",  "fn_high",  "tn_low",  "tn_high",  "fp_low",  "fp_high"]
+    labels = []
+    labels_detailed = []
+    i = 0
+    for index, length in enumerate(lengths):
 
-        for xid in range(activations_right_tp_high.shape[0]):
-            tsv_output = csv.writer(f_output, delimiter='\t')
-            tsv_output.writerow(activations_right_tp_high[xid])
-        ###############################################################################
-        for xid in range(activations_right_fn_low.shape[0]):
-            tsv_output = csv.writer(f_output, delimiter='\t')
-            tsv_output.writerow(activations_right_fn_low[xid])
+        labels.extend([classes[i]] * length)
+        labels_detailed.extend([classes_detailed[index]] * length)
+        if index % 2 == 1:
+            i += 1
 
-        for xid in range(activations_right_fn_high.shape[0]):
-            tsv_output = csv.writer(f_output, delimiter='\t')
-            tsv_output.writerow(activations_right_fn_high[xid])
-        ###############################################################################
-        for xid in range(activations_right_tn_low.shape[0]):
-            tsv_output = csv.writer(f_output, delimiter='\t')
-            tsv_output.writerow(activations_right_tn_low[xid])
+    return (labels,  labels_detailed)
 
-        for xid in range(activations_right_tn_high.shape[0]):
-            tsv_output = csv.writer(f_output, delimiter='\t')
-            tsv_output.writerow(activations_right_tn_high[xid])
-        ###############################################################################
-        for xid in range(activations_right_fp_low.shape[0]):
-            tsv_output = csv.writer(f_output, delimiter='\t')
-            tsv_output.writerow(activations_right_fp_low[xid])
-
-        for xid in range(activations_right_fp_high.shape[0]):
-            tsv_output = csv.writer(f_output, delimiter='\t')
-            tsv_output.writerow(activations_right_fp_high[xid])
-
-
-    labels = ["tp"] * (len(activations_right_tp_low) + len(activations_right_tp_high)) + ["fn"] * (len(activations_right_fn_low) + len(activations_right_fn_high)) + ["tn"] * (len(activations_right_tn_low) + len(activations_right_tn_high))  + ["fp"] * (len(activations_right_fp_low) + len(activations_right_fp_high))
-    labels_detailed = ["tp_low"] * len(activations_right_tp_low) + ["tp_high"] * len(activations_right_tp_high) + ["fn_low"] * len(activations_right_fn_low) + ["fn_high"] * len(activations_right_fn_high) + ["tn_low"] * len(activations_right_tn_low) + ["tn_high"] * len(activations_right_tn_high)  + ["fp_low"] * len(activations_right_fp_low) + ["fp_high"] * len(activations_right_fp_high)
-
+def write_labels_to_file(digits_location,  labels,  labels_detailed):
     with open(join(digits_location, 'metadata.tsv'), 'w') as handle:
         handle.write('{}\t{}\n'.format('Label', 'Label_Detailed'))
         i = 0
@@ -140,7 +86,43 @@ def write_output_and_labels(digits_location, model_loc):
                 handle.write('{}\t{}\n'.format(labels[i], labels_detailed[i]))
                 i += 1
 
+def get_subsets(pairs, digits):
+
+    subsets_to_return = []
+    j = 0
+    print('Len: ', len(digits))
+    for i in range(len(digits)):
+        if i == 2:
+            j += 1
+        subset_low = create_subset(pairs[j], digits[i][0])
+        subset_high = create_subset(pairs[j], digits[i][1])
+        subsets_to_return.append(subset_low)
+        subsets_to_return.append(subset_high)
+        
+    return subsets_to_return
+
+def write_output_and_labels(digits_location,  model_location):
+    network = load_model(model_location, custom_objects={'contrastive_loss' : contrastive_loss})
+
+    input = [network.layers[0].input,  network.layers[1].input]
+    outputs = network.layers[3].input 
+    functor = K.function(input, outputs)    
+    pairs_tn_fp,  pairs_tp_fn = load_pairs(digits_location)
+    (true_negatives_low,  true_negatives_high),  (false_positives_low,  false_positives_high),  (true_positives_low,  true_positives_high),  (false_negatives_low,  false_negatives_high) = load_test_data(digits_location)
+    
+
+    pairs = [pairs_tp_fn, pairs_tn_fp]
+    digits = [(true_positives_low, true_positives_high), (false_negatives_low, false_negatives_high),
+            (true_negatives_low, true_negatives_high), (false_positives_low, false_positives_high)]
+
+    all_pairs = get_subsets(pairs, digits)
+    all_activations, lengths = get_activations(functor,  all_pairs)
+    write_activations_to_file(digits_location,  all_activations)
+    labels,  labels_detailed = get_labels(lengths)
+    write_labels_to_file(digits_location,  labels,  labels_detailed)
+
 if __name__ == "__main__":
 
     for case in test_cases:
         write_output_and_labels(case[0], case[1])
+    

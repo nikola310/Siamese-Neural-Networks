@@ -75,10 +75,6 @@ def create_negative_pairs(x, digit_indices, nums=[], test_with_transformations=F
     return np.array(pairs), np.array(labels), np.array(indices)
 
 def place_in_array(array, dig_idx, index):
-    print(dig_idx)
-    print(type(dig_idx))
-    print(dig_idx.shape)
-    print(bruh_moment)
     for j in range(len(dig_idx)):
         if j == 9:
             array[9].append(index)
@@ -158,7 +154,7 @@ def test_tn_fp(model, plot_location_tn_fp, digits_location_tn_fp, transformation
     y_negative_pred = model.predict([te_negative_pairs[:, 0], te_negative_pairs[:, 1]])
     te_acc = compute_accuracy(te_y, y_negative_pred)
 
-    (true_negatives_low, true_negatives_high), (false_positives_low, false_positives_high) = sort_low_and_high_examples_into_arrays(y_negative_pred, dig_idx)
+    (false_positives_low, false_positives_high), (true_negatives_low, true_negatives_high)  = sort_low_and_high_examples_into_arrays(y_negative_pred, dig_idx)
 
     save_images_of_digits_for_comparison(plot_location_tn_fp, te_negative_pairs, ('False positive (low)', 'True negative (low)'), ('False positive (high)', 'True negative (high)'), 
         false_positives_low, false_positives_high, true_negatives_low, true_negatives_high)
@@ -233,7 +229,7 @@ def sort_low_and_high_examples_into_arrays(predictions, dig_idx):
             - equal or above 0.75
 
         Take note that when given true negatives and false positive prediction samples, it returns:
-        (true_negatives_low, true_negatives_high), (false_positives_low, false_positives_high),
+        (false_positives_low, false_positives_high), (true_negatives_low, true_negatives_high),
         but when given true positives and false negatives, return value is:
         (true_positives_low, true_positives_high), (false_negatives_low, false_negatives_high)
 

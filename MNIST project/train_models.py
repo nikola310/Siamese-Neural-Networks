@@ -151,7 +151,7 @@ def create_base_network(input_shape):
 
     return Model(input, x)
 
-def creatе_model():
+def create_model():
     # Network definition
     base_network = create_base_network(input_shape)
 
@@ -218,7 +218,7 @@ def train_model(model_dir, transformations=False):
     
     (tr_pairs, tr_y), (te_pairs, te_y) = prepare_data_for_work(transformations)
 
-    model = creatе_model()
+    model = create_model()
 
     model.fit([tr_pairs[:, 0], tr_pairs[:, 1]], tr_y, batch_size=batch_size,
             epochs=epochs, validation_data=([te_pairs[:, 0], te_pairs[:, 1]], te_y))
