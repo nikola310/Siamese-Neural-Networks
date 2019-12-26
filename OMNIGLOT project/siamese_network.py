@@ -1,17 +1,14 @@
 import tensorflow as tf
-from tensorflow.keras.layers import Conv2D, MaxPool2D, Flatten, Dense, Input, Subtract, Lambda
-from tensorflow.keras import Model, Sequential
+from tensorflow.keras.layers import Conv2D, MaxPool2D, Flatten, Dense, Input, Lambda
+from tensorflow.keras import Sequential
 import tensorflow.keras.backend as K
 from tensorflow.keras.models import load_model
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.callbacks import TensorBoard
-from omniglot_loader import OmniglotLoader
-import matplotlib.pyplot as plt
 import os
 from datetime import datetime
 import numpy as np
-import pickle
 
 class SiameseNetwork:
 
@@ -110,16 +107,11 @@ class SiameseNetwork:
         '''
         epoch_id = 0
 
-        if not os.path.exists(self.__save_dir):
-            os.makedirs(self.__save_dir)
-
-        if not os.path.exists(self.__train_dir):
-            os.makedirs(self.__train_dir)
-
-        if not os.path.exists(self.__test_dir):
-            os.makedirs(self.__test_dir)
+        self._create_training_directories()
 
         tensorboard, tensorboard_eval = self._get_tensorboards()
+
+        omniglot._training = True
 
         print('Training started.')
         while True:
@@ -129,11 +121,11 @@ class SiameseNetwork:
             images, labels = omniglot.get_training_batch()
             self.model.train_on_batch([images[:, 0], images[:, 1]], labels)
 
-            if omniglot.is_epoch_done():
+            if omniglot._epoch_done:
                 print('Epoch #' + str(epoch_id) + ' end.')
                 epoch_id += 1
                 print('Epoch #' + str(epoch_id) + ' start.')
-                omniglot.set_epoch_done(False)
+                omniglot._epoch_done = False
 
                 # Decay learning rate by 1% after each epoch
                 K.set_value(self.model.optimizer.lr, (K.get_value(self.model.optimizer.lr) * 0.99))
@@ -166,8 +158,9 @@ class SiameseNetwork:
                 - omniglot = instance of OmniglotLoader
         '''
         print('Testing started.')
-        omniglot.set_current_alphabet_index(0)
+        omniglot._current_alphabet_index = 0
         omniglot.set_training_evaluation_symbols(False)
+        omniglot._testing = True
 
         if not os.path.exists(self.__save_dir):
             os.makedirs(self.__save_dir)
@@ -181,7 +174,7 @@ class SiameseNetwork:
         accuracy = []
         print('Testing started.')
         while True:
-            if omniglot.is_evaluation_done():
+            if omniglot._evaluation_done:
                 break
 
             images, labels = omniglot.get_test_batch()
@@ -200,13 +193,13 @@ class SiameseNetwork:
             Arguments:
                 - omniglot = instance of OmniglotLoader
         '''
-        omniglot.set_current_alphabet_index(0)
+        omniglot._current_alphabet_index = 0
         omniglot.set_training_evaluation_symbols(False)
         labels = []
         predictions = []
         print('Testing started.')
         while True:
-            if omniglot.is_evaluation_done():
+            if omniglot._evaluation_done:
                 break
 
             images, true_val = omniglot.get_test_batch()
@@ -227,18 +220,14 @@ class SiameseNetwork:
                 - omniglot = instance of OmniglotLoader
         '''
         print('Testing false positives and true negatives started.')
-        omniglot.set_current_alphabet_index(0)
+        omniglot._current_alphabet_index = 0
         omniglot.set_training_evaluation_symbols(False)
-        omniglot.set_epoch_done(False)
-        
+        omniglot._epoch_done = False
+        omniglot._testing = True
         if not os.path.exists(self.__confusion_matrix_dir):
             os.makedirs(self.__confusion_matrix_dir)
         
-        # Create arrays for each case, where each digit represents number of samples for given dictionary
-        false_positives_low = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        false_positives_high = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        true_negatives_low = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        true_negatives_high = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        (false_positives_low, false_positives_high), (true_negatives_low, true_negatives_high) = self._get_empty_arrays_for_each_case()
 
         y_pred = []
         while True:
@@ -246,24 +235,9 @@ class SiameseNetwork:
             predictions = self.model.predict_on_batch([images[:, 0], images[:, 1]])
             y_pred.append(predictions)
 
-            # Calculate number of true positives and false negatives, 
-            # where both of them contain their low and high subclass. 
-            # Low true negatives are the ones for which prediction is below 0.25, while those that are 
-            # equal or aobve 0.25 and below 0.5 are high true negatives.
-            # Low false positives are the ones for which prediction above or equal 0.5 and below 0.75, 
-            # while those that are equal or above 0.75 are high false positives.
-            for i in range(len(predictions)):
-                if predictions[i] < 0.25:
-                    true_negatives_low[omniglot.get_current_alphabet_index()] += 1
-                elif predictions[i] >= 0.25 and predictions[i] < 0.5:
-                    true_negatives_high[omniglot.get_current_alphabet_index()] += 1
-                elif predictions[i] >= 0.5 and predictions[i] < 0.75:
-                    false_positives_low[omniglot.get_current_alphabet_index()] += 1
-                elif predictions[i] >= 0.75:
-                    false_positives_high[omniglot.get_current_alphabet_index()] += 1
+            self.calculate_high_and_lows(omniglot, predictions, (true_negatives_low, true_negatives_high), (false_positives_low, false_positives_high))
 
-            # print('Current alphabet: ' + str(omniglot.get_current_alphabet_index()))
-            if omniglot.is_epoch_done() == True:
+            if omniglot._epoch_done == True:
                 break
 
         # Serialize true positives and false negatives
@@ -272,12 +246,9 @@ class SiameseNetwork:
         np.save(os.path.join(self.__confusion_matrix_dir, 'false_positives_low'), false_positives_low)
         np.save(os.path.join(self.__confusion_matrix_dir, 'false_positives_high'), false_positives_high)
 
-        # Manually compute accuracy
-        y_pred = np.array(y_pred)
-        pred = y_pred.ravel() > 0.5
-        pred_sum = np.sum(pred)
+        accuracy = self._compute_accuracy(y_pred)
         print('Testing true negatives and false positives finished.')
-        print('Overall accuracy: ' + str((pred_sum / len(pred)) * 100))
+        print('Overall accuracy:', str(accuracy))
 
         return true_negatives_low, true_negatives_high, false_positives_low, false_positives_high
 
@@ -289,19 +260,16 @@ class SiameseNetwork:
                 - omniglot = instance of OmniglotLoader
         '''
         print('Testing true positives and false negatives started.')
-        omniglot.set_current_alphabet_index(0)
+        omniglot._current_alphabet_index = 0
         omniglot.set_training_evaluation_symbols(False)
-        omniglot.set_epoch_done(False)
-        
+        omniglot._epoch_done = False
+        omniglot._testing = True
 
         if not os.path.exists(self.__confusion_matrix_dir):
             os.makedirs(self.__confusion_matrix_dir)
 
         # Create arrays for each case, where each digit represents number of samples for given dictionary
-        true_positives_low = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        true_positives_high = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        false_negatives_low = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        false_negatives_high = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        (true_positives_low, true_positives_high), (false_negatives_low, false_negatives_high) = self._get_empty_arrays_for_each_case()
 
         y_pred = []
         while True:
@@ -310,24 +278,9 @@ class SiameseNetwork:
             predictions = self.model.predict_on_batch([images[:, 0], images[:, 1]])
             y_pred.append(predictions)
 
-            # Calculate number of true positives and false negatives, 
-            # where both of them contain their low and high subclass.
-            # Low false negatives are the ones for which prediction is below 0.25, while those that are 
-            # equal or aobve 0.25 and below 0.5 are high false negatives.
-            # Low true positives are the ones for which prediction above or equal 0.5 and below 0.75, 
-            # while those that are equal or aobve 0.75 are high true positives.
-            for i in range(len(predictions)):
-                if predictions[i] < 0.25:
-                    false_negatives_low[omniglot.get_current_alphabet_index()] += 1
-                elif predictions[i] >= 0.25 and predictions[i] < 0.5:
-                    false_negatives_high[omniglot.get_current_alphabet_index()] += 1
-                elif predictions[i] >= 0.5 and predictions[i] < 0.75:
-                    true_positives_low[omniglot.get_current_alphabet_index()] += 1
-                elif predictions[i] >= 0.75:
-                    true_positives_high[omniglot.get_current_alphabet_index()] += 1
+            self.calculate_high_and_lows(omniglot, predictions, (false_negatives_low, false_negatives_high), (true_positives_low, true_positives_high))
 
-            # print('Current alphabet: ' + str(omniglot.get_current_alphabet_index()))
-            if omniglot.is_epoch_done() == True:
+            if omniglot._epoch_done == True:
                 break
 
         # Serialize true positives and false negatives
@@ -336,14 +289,23 @@ class SiameseNetwork:
         np.save(os.path.join(self.__confusion_matrix_dir, 'false_negatives_low'), false_negatives_low)
         np.save(os.path.join(self.__confusion_matrix_dir, 'false_negatives_high'), false_negatives_high)
 
-        # Manually compute accuracy
-        y_pred = np.array(y_pred)
-        pred = y_pred.ravel() > 0.5
-        pred_sum = np.sum(pred)
+        accuracy = self._compute_accuracy(y_pred)
         print('Testing true positives and false negatives finished.')
-        print('Overall accuracy: ' + str((pred_sum / len(pred)) * 100))
+        print('Overall accuracy: ' + str(accuracy))
 
         return true_positives_low, true_positives_high, false_negatives_low, false_negatives_high
+
+    def calculate_high_and_lows(self, omniglot, predictions, test_case_0, test_case_1):
+        
+        for i in range(len(predictions)):
+            if predictions[i] < 0.25:
+                test_case_0[0][omniglot._current_alphabet_index] += 1
+            elif predictions[i] >= 0.25 and predictions[i] < 0.5:
+                test_case_0[1][omniglot._current_alphabet_index] += 1
+            elif predictions[i] >= 0.5 and predictions[i] < 0.75:
+                test_case_1[0][omniglot._current_alphabet_index] += 1
+            elif predictions[i] >= 0.75:
+                test_case_1[1][omniglot._current_alphabet_index] += 1
 
     ####################################################################
     # Various public functions                                         #
@@ -392,3 +354,23 @@ class SiameseNetwork:
         evaluation_tensorboard.set_model(self.model)
 
         return tensorboard, evaluation_tensorboard
+
+    def _get_empty_arrays_for_each_case(self):
+        return ([0]*10, [0]*10), ([0]*10, [0]*10)
+
+    def _create_training_directories(self):
+        if not os.path.exists(self.__save_dir):
+            os.makedirs(self.__save_dir)
+
+        if not os.path.exists(self.__train_dir):
+            os.makedirs(self.__train_dir)
+
+        if not os.path.exists(self.__test_dir):
+            os.makedirs(self.__test_dir)
+
+    def _compute_accuracy(self, predictions):
+
+        predictions = np.array(predictions)
+        pred = predictions.ravel() > 0.5
+        pred_sum = np.sum(pred)
+        return (pred_sum / len(pred)) * 100

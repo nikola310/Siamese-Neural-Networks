@@ -1,25 +1,14 @@
 import sys
-import random
-import tensorflow as tf
 from tensorflow.keras.models import load_model
-from tensorflow.keras.layers import Conv2D, MaxPool2D, Flatten, Dense, Input, Subtract, Lambda
+from tensorflow.keras.layers import Conv2D, MaxPool2D, Flatten, Dense
 import tensorflow.keras.backend as K
 import numpy as np
-import matplotlib.pyplot as plt
-from skimage import transform as tf
-from skimage.transform import AffineTransform
-from math import pi
-from keras.callbacks import TensorBoard
 from os import makedirs
 from os.path import exists, join
-from time import time
-import pickle
-import tensorflow as tf
 import csv
-from tensorflow.keras import Model, Sequential
+from tensorflow.keras import Sequential
 from omniglot_loader import OmniglotLoader
 from datetime import datetime
-from siamese_network import SiameseNetwork
 
 def copy_network(model):
     '''
@@ -46,7 +35,7 @@ def copy_network(model):
 
 def write_output_and_metadata(model, omniglot, training, model_type, test_type, log_dir):
 
-    omniglot.set_current_symbol_index(0)
+    omniglot._current_symbol_index = 0
     output_name = 'output_' + model_type + '_' + test_type + '.tsv'
     meta_output = 'metadata_' + model_type + '_' + test_type + '.tsv'
 
@@ -57,7 +46,7 @@ def write_output_and_metadata(model, omniglot, training, model_type, test_type, 
     # First true positives and false negatives
     print('Testing true positives and false negatives...')
     while True:
-        if omniglot.is_tp_batches_done():
+        if omniglot._tp_batches_done:
             break
 
         pairs, _ = omniglot.get_tp_batch(alphabet, training)
@@ -102,12 +91,12 @@ def write_output_and_metadata(model, omniglot, training, model_type, test_type, 
         '''
     print('Testing finished.')
 
-    omg.set_current_symbol_index(0)
+    omg._current_symbol_index = 0
 
     # Then true negatives and false positives
     print('Testing true negatives and false positives...')
     while True:
-        if omniglot.is_tn_batches_done():
+        if omniglot._tn_batches_done:
             break
 
         pairs, _ = omniglot.get_tn_batch(alphabet, training)

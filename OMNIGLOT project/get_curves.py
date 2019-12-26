@@ -1,14 +1,7 @@
 import scikitplot as skplt
 import sklearn
 import matplotlib.pyplot as plt
-import random
-from tensorflow.keras.datasets import mnist
-from tensorflow.keras.models import load_model
 import numpy as np
-import matplotlib.pyplot as plt
-import pickle
-from os.path import exists, join
-from os import makedirs
 import matplotlib.patches as mpatches
 from omniglot_loader import OmniglotLoader
 from siamese_network import SiameseNetwork

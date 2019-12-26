@@ -1,8 +1,4 @@
-import tensorflow as tf
-from tensorflow.keras.models import load_model
 from omniglot_loader import OmniglotLoader
-import matplotlib.pyplot as plt
-import numpy as np
 from os.path import exists, join
 from os import makedirs
 from datetime import datetime
@@ -13,7 +9,7 @@ def write_data_to_file(omniglot, tp_low, tp_high, fn_low, fn_high, tn_low, tn_hi
 
         df = pd.DataFrame(columns=['True positives (low)', 'True positives (high)', 'False negatives (low)', 'False negatives (high)', 'True negatives (low)', 'True negatives (high)', 'False positives (low)', 'False positives (high)'])
 
-        for idx in range(len(omg.get_evaluation_alphabet_names())):
+        for idx in range(len(omg._evaluation_alphabet_list)):
             new_row = pd.DataFrame({'True positives (low)' : [tp_low[idx]],
                                     'True positives (high)' : [tp_high[idx]],
                                     'False negatives (low)' : [fn_low[idx]],
@@ -50,14 +46,14 @@ if __name__ == "__main__":
         
         if test_wo_transformations:
             # Testing without transformations
-            omg.set_use_transformations(False)
+            omg.use_transformations = False
             tp_low, tp_high, fn_low, fn_high = sn.test_tp_fn(omg)
             tn_low, tn_high, fp_low, fp_high = sn.test_tn_fp(omg)
             write_data_to_file(omg, tp_low, tp_high, fn_low, fn_high, tn_low, tn_high, fp_low, fp_high, join(save_dir, 'table_tr_no_tf_te_no_tf.csv'))
         
         if test_w_transformations:
             # Now testing with transformations
-            omg.set_use_transformations(True)
+            omg.use_transformations = True
 
             tp_low, tp_high, fn_low, fn_high = sn.test_tp_fn(omg)
             tn_low, tn_high, fp_low, fp_high = sn.test_tn_fp(omg)
@@ -69,14 +65,14 @@ if __name__ == "__main__":
         
         if test_wo_transformations:
             # Testing without transformations
-            omg.set_use_transformations(False)
+            omg.use_transformations = False
             tp_low, tp_high, fn_low, fn_high = sn.test_tp_fn(omg)
             tn_low, tn_high, fp_low, fp_high = sn.test_tn_fp(omg)
             write_data_to_file(omg, tp_low, tp_high, fn_low, fn_high, tn_low, tn_high, fp_low, fp_high, join(save_dir, 'table_tr_tf_te_no_tf.csv'))
         
         if test_w_transformations:
             # Now testing with transformations
-            omg.set_use_transformations(True)
+            omg.use_transformations = True
 
             tp_low, tp_high, fn_low, fn_high = sn.test_tp_fn(omg)
             tn_low, tn_high, fp_low, fp_high = sn.test_tn_fp(omg)

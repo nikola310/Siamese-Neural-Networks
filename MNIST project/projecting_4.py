@@ -5,7 +5,6 @@ import numpy as np
 from os.path import join
 import pickle
 import csv
-from projecting_4 import create_subset
 
 test_cases = [('./data/model_w_tf_te', './test_models/siamese_model_transformations.h5'), ('./data/model_w_tf_te_tf', './test_models/siamese_model_transformations.h5'),
                 ('./data/model_wo_tf_te', './test_models/siamese_model.h5'), ('./data/model_wo_tf_te_tf', './test_models/siamese_model.h5')]  
@@ -86,11 +85,18 @@ def write_labels_to_file(digits_location,  labels,  labels_detailed):
                 handle.write('{}\t{}\n'.format(labels[i], labels_detailed[i]))
                 i += 1
 
+def create_subset(pairs, indices):
+    ret = []
+    
+    subset = []
+    subset = [indices[3][j] for j in range(len(indices[3]))]
+    ret += pairs[subset].tolist()
+    return np.asarray(ret)
+
 def get_subsets(pairs, digits):
 
     subsets_to_return = []
     j = 0
-    print('Len: ', len(digits))
     for i in range(len(digits)):
         if i == 2:
             j += 1

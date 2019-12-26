@@ -10,7 +10,6 @@ from os.path import exists, join
 from tensorflow.keras.datasets import mnist
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Flatten, Dense, Dropout, Lambda
-from tensorflow.keras.optimizers import RMSprop
 from tensorflow.keras import backend as K
 from datetime import datetime
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
@@ -168,8 +167,7 @@ def create_model():
                     output_shape=eucl_dist_output_shape, name='lambda')([processed_a, processed_b])
 
     model = Model([input_a, input_b], distance)
-    rms = RMSprop()
-    model.compile(loss=contrastive_loss, optimizer=rms, metrics=['accuracy'])
+    model.compile(loss=contrastive_loss, optimizer='rmsprop', metrics=['accuracy'])
 
     return model
 
@@ -236,8 +234,8 @@ if __name__ == "__main__":
         makedirs(model_dir)
     
     # Training model without transformations
-    model = train_model(model_dir)
-    model.save(join(model_dir, 'siamese_model.h5'))
+    #model = train_model(model_dir)
+    #model.save(join(model_dir, 'siamese_model.h5'))
     
     # Training model with transformations
     model = train_model(model_dir, True)

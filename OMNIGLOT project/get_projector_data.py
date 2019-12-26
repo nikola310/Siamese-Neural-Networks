@@ -1,25 +1,11 @@
-import sys
-import random
-import tensorflow as tf
 from tensorflow.keras.models import load_model
-from tensorflow.keras.layers import Conv2D, MaxPool2D, Flatten, Dense, Input, Subtract, Lambda
-import tensorflow.keras.backend as K
+from tensorflow.keras.layers import Conv2D, MaxPool2D, Flatten, Dense
 import numpy as np
-import matplotlib.pyplot as plt
-from skimage import transform as tf
-from skimage.transform import AffineTransform
-from math import pi
-from keras.callbacks import TensorBoard
 from os import makedirs
 from os.path import exists, join
-from time import time
-import pickle
-import tensorflow as tf
-import csv
-from tensorflow.keras import Model, Sequential
+from tensorflow.keras import Sequential
 from omniglot_loader import OmniglotLoader
 from datetime import datetime
-from siamese_network import SiameseNetwork
 
 def copy_network(model):
     '''
@@ -46,9 +32,7 @@ def copy_network(model):
 
 def write_output_and_metadata(model, omniglot, training, model_type, test_type, log_dir, network_copy):
 
-    #OutFunc = K.function([model.layers[2].get_layer('Conv_layer_1').input, [model.layers[0].input, model.layers[1].input]], [model.layers[2].get_layer('Dense_layer_1').output[1], model.layers[4].output])
-
-    omniglot.set_current_symbol_index(0)
+    omniglot._current_symbol_index = 0
     output_name = 'output_' + model_type + '_' + test_type + '.tsv'
     meta_output = 'metadata_' + model_type + '_' + test_type + '.tsv'
 
@@ -59,23 +43,15 @@ def write_output_and_metadata(model, omniglot, training, model_type, test_type, 
     # First true positives and false negatives
     print('Testing true positives and false negatives...')
     while True:
-        if omniglot.is_tp_batches_done():
+        if omniglot._tp_batches_done:
             break
 
         pairs, _ = omniglot.get_tp_batch(alphabet, training)
-        # maybe try outfunc in a different way?
-        # out_val = OutFunc([[pairs[:, 0], pairs[:, 1]], [pairs[:, 0], pairs[:, 1]]])
         
-        activations = network_copy.predict(pairs[:, 1]) # out_val[0][:] 
-        predictions = model.predict([pairs[:, 0], pairs[:, 1]]) # out_val[1][:] 
+        activations = network_copy.predict(pairs[:, 1])
+        predictions = model.predict([pairs[:, 0], pairs[:, 1]])
         
         with open(join(log_dir, output_name), 'a+') as f_output:
-            '''
-            for xid in range(activations.shape[0]):
-                tsv_output = csv.writer(f_output, delimiter='\t')
-                tsv_output.writerow(activations[xid])
-            '''
-
             for ac in activations[:]:
                 out = np.array2string(ac.flatten(), threshold=np.inf, precision=7, max_line_width=np.inf, separator='\t').replace('[', '').replace(']', '')
                 f_output.write(out + '\n')
@@ -101,21 +77,14 @@ def write_output_and_metadata(model, omniglot, training, model_type, test_type, 
             for i in range(len(metadata)):
                     f_metadata.write('{}\t{}\n'.format(metadata[i], metadata_detailed[i]))
         
-        '''
-        output_detailed = 'metadata_' + model_type + '_' + test_type + '_detailed.tsv'
-
-        with open(join(log_dir, output_detailed), 'a+') as f_metadata:
-            for meta in metadata_detailed:
-                    f_metadata.write('{}\n'.format(meta))
-        '''
     print('Testing finished.')
 
-    omg.set_current_symbol_index(0)
+    omg._current_symbol_index = 0
 
     # Then true negatives and false positives
     print('Testing true negatives and false positives...')
     while True:
-        if omniglot.is_tn_batches_done():
+        if omniglot._tn_batches_done():
             break
 
         pairs, _ = omniglot.get_tn_batch(alphabet, training)
@@ -174,15 +143,15 @@ if __name__ == "__main__":
     # Test three cases:
     # 1) Original Training and Test Data (No Transformations)
     omg = OmniglotLoader(use_transformations=False)
-    omg.set_current_alphabet_index(omg.get_alphabet_index(alphabet, False))
+    omg._current_alphabet_index = omg.get_alphabet_index(alphabet, False)
     omg.set_training_evaluation_symbols(False)
     write_output_and_metadata(model_wo_tf, omg, False, 'model', 'test', log_dir, net_copy)
     # 2) Training (No Transformation), Testing (With Transformations)
-    omg.set_tn_batches_done(False)
-    omg.set_tp_batches_done(False)
-    omg.set_use_transformations(True)
+    omg._tn_batches_done = False
+    omg._tp_batches_done = False
+    omg.use_transformations = True
     write_output_and_metadata(model_wo_tf, omg, False, 'model', 'test_tf', log_dir, net_copy)
     # 3) Transformation in both Training and Testing
-    omg.set_tn_batches_done(False)
-    omg.set_tp_batches_done(False)
+    omg._tn_batches_done = False
+    omg._tp_batches_done = False
     write_output_and_metadata(model_w_tf, omg, False, 'model_tf', 'test_tf', log_dir, net_copy)

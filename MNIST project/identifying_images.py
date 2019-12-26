@@ -3,7 +3,6 @@ from tensorflow.keras.datasets import mnist
 from tensorflow.keras.models import load_model
 import numpy as np
 import matplotlib.pyplot as plt
-import tensorflow.keras.backend as K
 import pickle
 from os.path import exists, join
 from os import makedirs
