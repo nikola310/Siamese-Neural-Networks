@@ -1,16 +1,20 @@
-# Neuronske mreže 2018/2019
+# Experiment with MNIST dataset and Keras' example
 
-U projektu je ispitano kako različite afine transformacije utiču prilikom treniranje i testiranja sijamskih neuronskih mreža.
-Za implementaciju je korišten Tensorflow 1 i Keras.
+The goal of this experiment was to test how different affine transformations affect the training and testing of siamese neural networks.
+Implementation is done in Tensorflow and Keras.
 
-Obrađena su četiri slučaja: treniranje i testiranje bez transformacija, treniranje i testiranje sa transformacijama, treniranje bez transformacija, a testiranje sa transformacijama te konačno, treniranje sa transformacijama i testiranje bez transformacija. 
+Four cases are covered: 
+1. training and testing without transformations,
+2. training and testing with transformations,
+3. training without transformations and testing with transformations,
+4. training with transformations and testing without transformations 
 
-Da bi se trenirali modeli sa i bez transformacija, pozvati **train_models.py**.
+To train models with and without transformations, run **train_models.py**.
 
-Za određivanje pozitivnih i negativnih parova, pozvati **identifying_images.py**. Potrebno je prvo postaviti promenljivu **model_location** na direktorijum u kojemu se nalaze modeli trenirani preko train_models.py ('./data/...')
+To determine positive and negative pairs, run **identifying_images.py**. It is necessary to set up **model_location** variable to point to the directory that contains models trained with **train_models.py** ('./data/...')
 
-Za dobijanje tabelarnog prikaza rezultata, pokrenuti **get_tables.py**.
+To get results organized in table, run **get_tables.py**.
 
-Pošto je prilikom učitavanja transformacija za cifru 4 uočena najveće odstupanje, njeni podaci su detaljnije obrađeni. Da bi se dobio "embedding" za tu cifru, potrebno je pokrenuti **projecting_4.py**, te nakon toga **get_plots.py** nakon čega će biti sačuvani grafovi sa označenim pozitivnim i negativnim rezultatima.
+Because during the analysis of the results the highest difference in results was observed for digit 4, these results were analyzed in more detail. To get embedding for digit 4, it is necessary to run **projecting_4.py** and **get_plots.py**, to get plots with marked positive and negative results.
 
-U **tables.pdf** se nalazi tabelarni prikaz rezultata, sa izračunatim vrednostima za precision, recall i F1 score sa izračunatom standardnom devijacijom.
+Table overview of the results is shown in **tables.pdf**.
