@@ -11,8 +11,20 @@ MNIST project folder contains scripts for training and testing of Keras' siamese
 
 OMNIGLOT project folder contains scripts for running siamese neural network by Koch et al.
 
-#TODO
-how to prepare and install (requirements.txt)
+## Installation
+
+First, create conda and activate environment with:
+```bash
+conda create -n tf_venv python=3.7.7
+
+conda activate tf_venv
+```
+
+After that, you can install requirements by running:
+
+```bash
+conda install -c conda-forge --file requirements.txt
+```
 
 #TODO
 explain the experiment (edit readme.md)
