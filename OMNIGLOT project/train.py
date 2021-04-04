@@ -15,13 +15,13 @@ def parse_args():
                         help = 'train model with affine transformations')
     parser.add_argument('--gpu', 
                         default = 0, type = int,
-                        help = 'specify which GPU to use (default 0, if available)')
+                        help = 'specify which GPU to use')
     parser.add_argument('--epochs',
                         default = 10, type = int,
-                        help = 'specify number of epochs (default: 10)')
+                        help = 'specify number of epochs')
     parser.add_argument('--memory_limit',
                         default = None, type = int,
-                        help = 'specify memory limit for GPU (default: None)')
+                        help = 'specify memory limit for GPU')
 
     args = parser.parse_args()
     return args
