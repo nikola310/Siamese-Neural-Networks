@@ -1,0 +1,8 @@
+kmnist-test-imgs.npz
+kmnist-train-imgs.npz
+kmnist-test-labels.npz
+kmnist-train-labels.npz  models  train_and_log.py
+tr_run/
+test_models/
+logs/
+data/

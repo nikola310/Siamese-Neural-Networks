@@ -1,0 +1,8 @@
+X_kannada_MNIST_test.npz
+y_kannada_MNIST_test.npz
+X_kannada_MNIST_train.npz
+y_kannada_MNIST_train.npz
+tr_run/
+test_models/
+logs/
+data/
