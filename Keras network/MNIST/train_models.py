@@ -234,8 +234,8 @@ if __name__ == "__main__":
         makedirs(model_dir)
     
     # Training model without transformations
-    #model = train_model(model_dir)
-    #model.save(join(model_dir, 'siamese_model.h5'))
+    model = train_model(model_dir)
+    model.save(join(model_dir, 'siamese_model.h5'))
     
     # Training model with transformations
     model = train_model(model_dir, True)

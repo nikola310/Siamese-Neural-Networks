@@ -144,7 +144,8 @@ def create_pairs(x, digit_indices, nums=[], transform=False):
 
 
 def create_base_network(input_shape):
-    '''Base network to be shared (eq. to feature extraction).
+    '''
+        Base network to be shared (eq. to feature extraction).
     '''
     input = Input(shape=input_shape)
     x = Flatten()(input)
@@ -156,12 +157,14 @@ def create_base_network(input_shape):
     return Model(input, x)
 
 def accuracy(y_true, y_pred):
-    '''Compute classification accuracy with a fixed threshold on distances.
+    '''
+        Compute classification accuracy with a fixed threshold on distances.
     '''
     return K.mean(K.equal(y_true, K.cast(y_pred < 0.5, y_true.dtype)))
 
 def compute_accuracy(y_true, y_pred):
-    '''Compute classification accuracy with a fixed threshold on distances.
+    '''
+        Compute classification accuracy with a fixed threshold on distances.
     '''
     pred = y_pred.ravel() < 0.5
     return np.mean(pred == y_true)
@@ -243,34 +246,19 @@ def prepare_data_for_work(transformations):
 
     return (tr_pairs, tr_y), (te_pairs, te_y)
 
-if __name__ == "__main__":
+def main():
+    run_start_time = datetime.today().strftime('%Y-%m-%d %H-%M-%S')
+    model_dir = './models/' + run_start_time
+    log_dir = './logs/' + run_start_time
+    if not exists(model_dir):
+        makedirs(model_dir)
+    if not exists(log_dir):
+        makedirs(log_dir)
 
-    gpus = tf.config.experimental.list_physical_devices('GPU')
-    print(gpus)
-    '''
-    if gpus:
-        try:
-            tf.config.experimental.set_virtual_device_configuration(
-                gpus[0], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=3072)])
-            logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
-            with tf.device('GPU:0'):
-
-                run_start_time = datetime.today().strftime('%Y-%m-%d %H-%M-%S')
-                model_dir = './models/' + run_start_time
-                log_dir = './logs/' + run_start_time
-                if not exists(model_dir):
-                    makedirs(model_dir)
-                if not exists(log_dir):
-                    makedirs(log_dir)
-
-                # Training model without transformations
-                model = train_model(model_dir, log_dir, False)
-                model.save(join(model_dir, 'siamese_model.h5'))
-        except RuntimeError as e:
-            print(e)
-    else:
-    '''
+    # Training model with transformations
+    model = train_model(model_dir, log_dir, True)
+    model.save(join(model_dir, 'siamese_model.h5'))
+    
     run_start_time = datetime.today().strftime('%Y-%m-%d %H-%M-%S')
     model_dir = './models/' + run_start_time
     log_dir = './logs/' + run_start_time
@@ -282,3 +270,20 @@ if __name__ == "__main__":
     # Training model without transformations
     model = train_model(model_dir, log_dir, False)
     model.save(join(model_dir, 'siamese_model.h5'))
+
+if __name__ == "__main__":
+
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    
+    if gpus:
+        try:
+            tf.config.experimental.set_virtual_device_configuration(
+                gpus[0], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=3072)])
+            logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+            with tf.device('GPU:0'):
+                main()
+        except RuntimeError as e:
+            print(e)
+    else:
+        main()

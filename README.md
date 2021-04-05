@@ -1,4 +1,4 @@
-# Siamese-Neural-Networks
+# Siamese Neural Networks
 
 ## Introduction
 Code used for my master thesis. Comparison of two different Siamese neural networks for image recognition: 
