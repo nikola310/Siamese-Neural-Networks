@@ -1,14 +1,15 @@
-import sys
-from tensorflow.keras.models import load_model
-from tensorflow.keras.layers import Conv2D, MaxPool2D, Flatten, Dense
-import tensorflow.keras.backend as K
+import csv
 import numpy as np
+import sys
+import tensorflow.keras.backend as K
+
+from datetime import datetime
+from omniglot_loader import OmniglotLoader
 from os import makedirs
 from os.path import exists, join
-import csv
 from tensorflow.keras import Sequential
-from omniglot_loader import OmniglotLoader
-from datetime import datetime
+from tensorflow.keras.layers import Conv2D, MaxPool2D, Flatten, Denses
+from tensorflow.keras.models import load_model
 
 def copy_network(model):
     '''

@@ -1,9 +1,10 @@
-from omniglot_loader import OmniglotLoader
-from os.path import exists, join
-from os import makedirs
-from datetime import datetime
-from siamese_network import SiameseNetwork
 import pandas as pd
+
+from datetime import datetime
+from omniglot_loader import OmniglotLoader
+from os import makedirs
+from os.path import exists, join
+from siamese_network import SiameseNetwork
 
 def write_data_to_file(omniglot, tp_low, tp_high, fn_low, fn_high, tn_low, tn_high, fp_low, fp_high, csv_file):
 

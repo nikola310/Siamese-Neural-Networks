@@ -1,14 +1,15 @@
+import numpy as np
+import os
 import tensorflow as tf
-from tensorflow.keras.layers import Conv2D, MaxPool2D, Flatten, Dense, Input, Lambda
-from tensorflow.keras import Sequential
 import tensorflow.keras.backend as K
+
+from datetime import datetime
+from tensorflow.keras import Sequential
+from tensorflow.keras.callbacks import TensorBoard
+from tensorflow.keras.initializers import RandomNormal
+from tensorflow.keras.layers import Conv2D, MaxPool2D, Flatten, Dense, Input, Lambda
 from tensorflow.keras.models import load_model
 from tensorflow.keras.regularizers import l2
-from tensorflow.keras.initializers import RandomNormal
-from tensorflow.keras.callbacks import TensorBoard
-import os
-from datetime import datetime
-import numpy as np
 
 class SiameseNetwork:
 

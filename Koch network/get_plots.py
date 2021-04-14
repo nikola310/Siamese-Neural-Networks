@@ -1,9 +1,10 @@
-import pandas as pd
-import umap
-from os.path import join
-import matplotlib.pyplot as plt
 import matplotlib
 import matplotlib.patches as mpatches
+import matplotlib.pyplot as plt
+import pandas as pd
+import umap
+
+from os.path import join
 
 classes_dict = {'tp':'True positives', 'fn':'False negatives', 'tn':'True negatives', 'fp':'False positives',
                 'tp_low':'True positives (low)', 'fn_low':'False negatives (low)', 'tn_low':'True negatives (low)', 'fp_low':'False positives (low)',

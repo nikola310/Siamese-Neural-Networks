@@ -1,7 +1,8 @@
 import os
-import random
 import matplotlib.pyplot as plt
 import numpy as np
+import random
+
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 class OmniglotLoader():

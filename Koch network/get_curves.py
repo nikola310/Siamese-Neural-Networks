@@ -1,13 +1,15 @@
-import scikitplot as skplt
-import sklearn
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
-import matplotlib.patches as mpatches
+import scikitplot as skplt
+import sklearn
+
 from omniglot_loader import OmniglotLoader
 from siamese_network import SiameseNetwork
 
 model_wo_tf = './trained_models/wo_transform/model.h5'
 model_w_tf = './trained_models/w_transform/model.h5'
+
 if __name__ == '__main__':
 
     # First test case, training without transformations, testing without transformations
