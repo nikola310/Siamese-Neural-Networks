@@ -26,7 +26,7 @@ class SiameseNetwork:
         if model_location is not None:
             self.model = load_model(model_location)
         else:
-            self.model = self.__get_siamese_model()
+            self.model = self._get_siamese_model()
         self.batch = batch
         run_start_time = datetime.today().strftime('%Y-%m-%d %H-%M-%S')
         self.__save_dir = './models/' + run_start_time
@@ -43,7 +43,7 @@ class SiameseNetwork:
     def set_current_epoch(self, epoch):
         self.__current_epoch = epoch
 
-    def __get_siamese_model(self):
+    def _get_siamese_model(self):
         '''
             Creates siamese neural network
 
