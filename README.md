@@ -25,9 +25,3 @@ After that, you can install requirements by running:
 ```bash
 conda install -c conda-forge --file requirements.txt
 ```
-
-#TODO
-explain the experiment (edit readme.md)
-
-#TODO
-code cleaning?
